@@ -1,0 +1,51 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+coverage/
+*.tsbuildinfo
+
+# generated Prisma client (rebuilt by postinstall / db:generate)
+apps/api/src/generated/
+
+# environment - never commit real secrets
+.env
+.env.*
+!.env.example
+
+# local databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+
+# database backups
+apps/api/backups/
+
+# challenge attachments are private and loaded per event
+storage/attachments/*
+!storage/attachments/.gitkeep
+
+# challenge-services (Python): secrets, venv, generated and runtime artifacts
+__pycache__/
+*.pyc
+challenge-services/.venv/
+challenge-services/.flags.env
+challenge-services/generated/
+challenge-services/runtime/
+challenge-services/logs/
+
+# logs and OS noise
+*.log
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+
+# E2E (Playwright)
+apps/api/e2e.db*
+apps/web/e2e-results/
+apps/web/playwright-report/
+apps/web/test-results/

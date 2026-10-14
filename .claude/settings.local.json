@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm i -D -w @cydemic/shared typescript vitest 2>&1)",
+      "PowerShell(npm i -w @cydemic/api express helmet cors pino pino-http zod 2>&1)",
+      "PowerShell(npm i -D concurrently 2>&1)"
+    ]
+  }
+}

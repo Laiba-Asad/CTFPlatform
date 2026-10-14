@@ -1,0 +1,51 @@
+{
+  "name": "cydemic-ctf",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cydemic CTF // ARENA - capture the flag competition platform",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build -w @cydemic/api && npm run build -w @cydemic/web",
+    "start": "node scripts/start.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "test": "npm run check:brand && npm run check:static && npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "check:brand": "node scripts/check-brand-colors.mjs",
+    "check:static": "node scripts/check-security-static.mjs",
+    "seed": "npm run seed -w @cydemic/api --",
+    "reset": "npm run reset -w @cydemic/api --",
+    "dev:clean-players": "npm run dev:clean-players -w @cydemic/api --",
+    "admin:create": "npm run admin:create -w @cydemic/api --",
+    "admin:reset-password": "npm run admin:reset-password -w @cydemic/api --",
+    "admin:seed-dev": "npm run admin:seed-dev -w @cydemic/api --",
+    "event:reset": "npm run event:reset -w @cydemic/api --",
+    "test:e2e": "npm run test:e2e -w @cydemic/web --",
+    "flag:hash": "npm run flag:hash -w @cydemic/api --",
+    "join-link": "npm run join-link -w @cydemic/api --",
+    "db:pg-sync": "npm run db:pg-sync -w @cydemic/api --",
+    "challenges:setup": "node scripts/setup-challenges.mjs",
+    "challenges:captures": "node scripts/run-python.mjs generate_captures.py"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1",
+    "deepmerge-ts": "^8.0.2",
+    "mysql2": "^3.24.5"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "better-sqlite3@12.11.1": true,
+    "prisma@7.10.0": true,
+    "@prisma/engines@7.10.0": true
+  }
+}

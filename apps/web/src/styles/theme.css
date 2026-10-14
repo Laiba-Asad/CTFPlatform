@@ -1,0 +1,109 @@
+/*
+ * Cydemic design tokens - the ONLY place brand values are defined.
+ *
+ * Calm, flat and professional: black frame (top bar + sidebar), light grey
+ * page, white cards with thin borders. Teal only marks "active / in progress".
+ *
+ * Tailwind's default colors, type scale, shadows and blurs are wiped
+ * (`--*: initial`) so off-brand hues, big headlines, glows and blurs cannot
+ * be used by accident. scripts/check-brand-colors.mjs enforces the rest.
+ */
+@theme {
+  --color-*: initial;
+
+  /* Active sidebar item, timer, progress fill, "you" row, solved border. Never large fills. */
+  --color-teal: #03daaa;
+  /* Small teal labels on white (kicker text, SOLVED). 5.3:1 on white. */
+  --color-teal-dark: #027a5f;
+  /* Text, primary buttons, difficulty dots */
+  --color-ink: #151515;
+  /* Top bar and sidebar only */
+  --color-black: #101114;
+  /* Page background */
+  --color-bg: #f4f6f7;
+  /* Cards */
+  --color-white: #ffffff;
+  /* Card borders and dividers: ink at 16% */
+  --color-line: #15151529;
+
+  --font-*: initial;
+  /* Anton: ONLY the hero player name and page titles (see Display.tsx) */
+  --font-display: 'Anton', 'Impact', 'Arial Narrow', sans-serif;
+  --font-label: 'Space Grotesk', system-ui, sans-serif;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+
+  /* Small, quiet type scale. Nothing exceeds 32px. */
+  --text-*: initial;
+  --text-micro: 10px;
+  --text-micro--line-height: 14px;
+  --text-xs: 11px;
+  --text-xs--line-height: 16px;
+  --text-sm: 12px;
+  --text-sm--line-height: 16px;
+  --text-base: 13px;
+  --text-base--line-height: 20px;
+  --text-body: 14px;
+  --text-body--line-height: 22px;
+  --text-md: 15px;
+  --text-md--line-height: 20px;
+  --text-card: 17px;
+  --text-card--line-height: 24px;
+  --text-timer: 20px;
+  --text-timer--line-height: 28px;
+  --text-stat: 24px;
+  --text-stat--line-height: 30px;
+  --text-title: 26px;
+  --text-title--line-height: 30px;
+  --text-hero: 32px;
+  --text-hero--line-height: 36px;
+
+  /* ~1.5px at 11px */
+  --tracking-label: 0.14em;
+  --tracking-kicker: 0.18em;
+  --tracking-wordmark: 0.24em;
+
+  --radius-card: 14px;
+  --radius-control: 10px;
+
+  /* Flat UI: no shadows, glows or blurs exist in this theme. */
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+  --blur-*: initial;
+
+  --animate-blink: blink 1s ease-in-out infinite;
+  --animate-toast-in: toast-in 160ms ease-out;
+
+  @keyframes blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Brand aliases matching the brand sheet, for use in plain CSS. */
+:root {
+  --teal: var(--color-teal);
+  --teal-dark: var(--color-teal-dark);
+  --ink: var(--color-ink);
+  --black: var(--color-black);
+  --bg: var(--color-bg);
+  --white: var(--color-white);
+  --line: var(--color-line);
+}

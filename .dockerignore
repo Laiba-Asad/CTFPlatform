@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/coverage
+**/*.db
+**/*.db-journal
+.env
+.env.*
+.git
+.vscode
+storage/attachments

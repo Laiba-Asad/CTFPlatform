@@ -1,0 +1,8 @@
+# Challenge services runtime. Pinned for a reproducible offline LAN deploy.
+Flask==3.1.0
+Werkzeug==3.1.3
+PyJWT==2.10.1
+waitress==3.0.2
+itsdangerous==2.2.0
+# Capture generator only (not needed to serve challenges):
+scapy==2.6.1

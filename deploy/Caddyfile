@@ -1,0 +1,29 @@
+# Public reverse proxy.
+# SITE_ADDRESS=http://localhost  -> plain HTTP for local testing
+# SITE_ADDRESS=ctf.example.com   -> automatic HTTPS (Let's Encrypt), HTTP redirects to HTTPS
+
+{$SITE_ADDRESS:http://localhost} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+
+	handle /healthz {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:8080
+	}
+}

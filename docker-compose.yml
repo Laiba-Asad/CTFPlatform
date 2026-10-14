@@ -1,0 +1,61 @@
+# Production-like stack: docker compose up --build
+# Reads secrets and settings from .env (copy .env.example first).
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        # sqlite | postgresql. Must match DOCKER_DATABASE_URL.
+        DB_PROVIDER: ${DOCKER_DB_PROVIDER:-sqlite}
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: "4000"
+      TRUST_PROXY: "1"
+      # Container-specific values; dev values for these in .env are ignored here.
+      CORS_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost}
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-file:/data/ctf.db}
+    volumes:
+      - api-data:/data
+      # Challenge attachments, mounted read-only and served only via authorized API routes
+      - ./storage/attachments:/app/storage/attachments:ro
+    expose:
+      - "4000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_POLL_INTERVAL_MS: ${VITE_POLL_INTERVAL_MS:-12000}
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    depends_on:
+      - api
+      - web
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  api-data:
+  caddy-data:
+  caddy-config:
