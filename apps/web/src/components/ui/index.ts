@@ -1,7 +1,6 @@
 export { Avatar, type AvatarSize } from './Avatar';
 export { Button, buttonClasses } from './Button';
 export { categoryIcon } from './categoryIcon';
-export { DifficultyDots } from './DifficultyDots';
 export { HeroName, PageTitle } from './Display';
 export { Input } from './Input';
 export { Logo } from './Logo';

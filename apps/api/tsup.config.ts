@@ -20,6 +20,19 @@ export default defineConfig({
   outDir: 'dist',
   clean: true,
   sourcemap: true,
+  // ESM output: provide working CommonJS globals (require, __filename, __dirname)
+  // so any bundled CJS dependency that uses them works. Avoids esbuild's
+  // "Dynamic require" stub and "__filename is not defined" at runtime.
+  banner: {
+    js: [
+      "import { createRequire as __cjsCreateRequire } from 'module';",
+      "import { fileURLToPath as __cjsFileURLToPath } from 'url';",
+      "import { dirname as __cjsDirname } from 'path';",
+      'const require = __cjsCreateRequire(import.meta.url);',
+      'const __filename = __cjsFileURLToPath(import.meta.url);',
+      'const __dirname = __cjsDirname(__filename);',
+    ].join('\n'),
+  },
   // The shared workspace package ships TypeScript source; bundle it in.
   noExternal: ['@cydemic/shared'],
 });

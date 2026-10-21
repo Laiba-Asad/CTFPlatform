@@ -19,7 +19,7 @@ beforeEach(async () => {
   await seedTeams(db);
   await seedEvent(db, 'live');
   const { salt, hash } = hashFlag(PEPPER, 'CYFLAG-win');
-  await db.challenge.create({ data: { id: 'web1', number: 1, title: 'web1', description: 'd', category: 'WEB', difficulty: 2, points: 100, flagHash: hash, flagSalt: salt, port: 5001, released: true } });
+  await db.challenge.create({ data: { id: 'web1', title: 'web1', description: 'd', category: 'WEB', points: 100, flagHash: hash, flagSalt: salt, port: 5001, released: true } });
   await addUser(db, 'Ava Stone', 'z3r0d4y');
 });
 
@@ -75,7 +75,7 @@ describe('GET /api/health', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ status: 'ok', database: 'ok' });
     expect(res.body.event).toMatchObject({ mode: 'live', phase: 'live' });
-    expect(res.body.challenges).toEqual({ released: 1, total: 1 });
+    expect(res.body.challenges).toEqual({ released: 1, total: 1, withService: 1, retiredInDatabase: [] });
     expect(res.body.services.supervising).toBe(false);
   });
 });

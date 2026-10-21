@@ -13,10 +13,21 @@ players, adjusting scores, and exporting results.
 
 ## By the numbers (verified)
 
-- **15 challenges**, **5,450 points** total (12 web + network challenges).
+- **15 challenges**, **2,250 points** total, built so beginners can finish on a
+  one-hour clock. **Every challenge is solvable with just a web browser and its
+  built-in DevTools** (plus an in-site decoder Toolkit) - nothing to install.
+  **15 challenge services** run during the event.
+- Players see points, category and solver count; there is **no difficulty
+  level** anywhere (removed from the site, the admin, the API and the database).
+- 15 harder or tool-dependent challenges were retired across phases and kept
+  aside (inert) so they can be restored later.
 - **70 API endpoints** across players and admin.
-- **147 automated tests**: 110 API/integration, 30 shared-logic, 2 web, plus **5
-  end-to-end browser journeys** (real Chromium, multi-player).
+- **263 automated tests**: 146 API/integration (incl. production static-exposure,
+  admin-IP restriction and restart-resilience), 31 shared-logic, 8 web/toolkit,
+  65 challenge-service tests (solve, no-leak, cookie isolation, browser-only
+  audit), plus **13 end-to-end browser tests** (real Chromium). Validated
+  end-to-end in production mode: a fresh install from the package zip, `prod:init`,
+  `preflight`, `exposure-check`, and a full solve of two challenges.
 - **6 teams**, one shared **60-minute** event clock (configurable).
 
 ## Technology (exact versions)
@@ -45,7 +56,7 @@ apps/
   web/     React player site and the /admin organizer dashboard (one build)
 packages/
   shared/  Types and rules shared by both sides (one source of truth)
-challenge-services/  Python processes, one per web challenge, started on demand
+challenge-services/  Python processes, one per challenge service, started on demand
 seed/      Teams, event and challenge definitions
 ```
 
@@ -62,7 +73,7 @@ seed/      Teams, event and challenge definitions
 - **Two separate areas.** The player site and the `/admin` dashboard have separate
   logins, cookies and cross-site-request protections. The admin area is restricted
   to the organizers' machines (localhost by default).
-- **Challenge isolation.** Each web challenge runs as its own Python process,
+- **Challenge isolation.** Each challenge service runs as its own Python process,
   started and stopped by a supervisor as organizers release or lock it; a crash of
   one challenge cannot take down the platform.
 
@@ -72,23 +83,32 @@ seed/      Teams, event and challenge definitions
   slow `scrypt` hash; session tokens stored only as hashes.
 - Login lockout after repeated failures; signed double-submit CSRF protection;
   strict security headers (Content-Security-Policy, no framing).
-- Admin area limited by network (configurable CIDR allowlist), every admin action
-  written to an **append-only audit log**, destructive actions require typed
-  confirmation and take a database backup first.
+- The admin area is limited to **exact IPs** (`ADMIN_ALLOWED_IPS`); in production
+  everyone else gets **404**, so players cannot even see the organizer login.
+  Every admin action is written to an **append-only audit log**; destructive
+  actions require typed confirmation and take a database backup first.
+- Production **refuses to start** on unsafe config (dev secrets, `AUTO_UNLOCK_ALL`,
+  `EVENT_MODE=live`, a weak/default admin password, an unreset `admin:seed-dev`).
+  The API serves only the built web app; a static-exposure test proves the answer
+  key, `.env`, `.flags.env`, `.git`, databases and backups all return 404/403.
 - Everything is self-hosted (no external CDNs or fonts), so it runs on an offline
   LAN. Automated checks fail the build if a flag literal, an external URL, or an
   unguarded admin route is introduced.
 
-## Running the event on a LAN
+## Running the event on a Windows VM (production)
 
-1. On the server: `npm install`, set a real `SESSION_SECRET` and `FLAG_PEPPER` in
-   `.env`, set the real event date, `npm run flag:hash`, then seed.
-2. Create an organizer account: `npm run admin:create`.
-3. `npm run build` then `npm run start` serves the player site and API on one port.
-4. Players connect to the server's address; organizers open `/admin` locally and
-   press **Start event now** when ready.
+1. On the VM: `npm ci`, `npm run challenges:setup`, then `npm run prod:init`
+   (writes `.env` with strong random secrets and the detected LAN IP, migrates,
+   seeds the 15 challenges **locked**, and rehashes every flag into the database
+   with the new pepper).
+2. Create an organizer account: `npm run admin:create` (min 12 characters).
+3. Open the firewall (`scripts\windows\open-firewall.ps1`, admin PowerShell) and
+   run `npm run preflight` until every line is **PASS**.
+4. Double-click **`start-event.cmd`**. Players open `http://<vm-ip>:8080`.
+5. In `/admin`: **Release all missions**, then **Start event now**.
 
-Full operator steps and the pre-event checklist are in the main `README.md`.
+Load test: 40 concurrent players sustained **0 errors** with API **p95 ~100 ms**.
+Full operator steps: `docs/DEPLOY-WINDOWS-VM.md`; runbook: `docs/EVENT-DAY-RUNBOOK.md`.
 
 ## Known limits and risks
 
@@ -96,9 +116,9 @@ Full operator steps and the pre-event checklist are in the main `README.md`.
   or multi-server event should switch to **PostgreSQL** (supported, one setting).
 - The admin **login lockout** is held in memory per server process, so it resets
   if the API is restarted. This is intentional for a single-server event.
-- **Challenge ports (5001–5013) must be exposed directly, not behind a reverse
-  proxy** (documented in the README) — one challenge deliberately trusts proxy
-  headers, and proxying would break it.
+- **Challenge ports (5001, 5002, 5014–5026) must be exposed directly, not behind a
+  reverse proxy** (documented in the README): players open each target in the
+  browser at its own port.
 - Set the **real event start time** before the event: the example configuration
   ships a placeholder window (22 Oct 2026, 10:00–14:00 Asia/Karachi).
 - The organizer dashboard is intended for a trusted LAN; exposing it to the open

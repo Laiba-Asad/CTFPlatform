@@ -1,6 +1,7 @@
 import { TEAMS } from '@cydemic/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetDb, testConfig, testDb } from '../test-utils';
+import { RETIRED_CHALLENGE_IDS } from '../challenges/retired';
 import { seed } from './seed';
 
 const db = testDb();
@@ -21,6 +22,22 @@ describe('seed', () => {
 
     const event = await db.event.findUniqueOrThrow({ where: { id: 'main' } });
     expect(event.endsAt.getTime()).toBeGreaterThan(event.startsAt.getTime());
+  });
+
+  it('seeds the 15 active challenges: 2,250 points, 15 services, no capture, none retired, all locked', async () => {
+    await seed(db, testConfig());
+    const challenges = await db.challenge.findMany({ include: { attachments: true } });
+    expect(challenges).toHaveLength(15);
+    expect(challenges.reduce((s, c) => s + c.points, 0)).toBe(2250);
+    expect(challenges.filter((c) => c.port !== null).map((c) => c.port).sort()).toEqual(
+      [5001, 5002, 5014, 5015, 5016, 5017, 5018, 5019, 5020, 5021, 5022, 5023, 5024, 5025, 5026],
+    );
+    expect(challenges.filter((c) => c.attachments.length)).toHaveLength(0);
+    for (const id of RETIRED_CHALLENGE_IDS) expect(challenges.some((c) => c.id === id)).toBe(false);
+    // Default locked; AUTO_UNLOCK_ALL=true (development) releases everything.
+    expect(challenges.every((c) => !c.released)).toBe(true);
+    await seed(db, testConfig({ AUTO_UNLOCK_ALL: 'true' }));
+    expect(await db.challenge.count({ where: { released: true } })).toBe(15);
   });
 
   it('is idempotent and keeps existing event dates unless asked', async () => {

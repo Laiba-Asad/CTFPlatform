@@ -5,10 +5,10 @@ import { addUser, resetDb, seedTeams, testConfig, testDb } from '../test-utils';
 
 const db = testDb();
 
-async function challenge(id: string, points: number, number: number) {
+async function challenge(id: string, points: number) {
   const { salt, hash } = hashFlag(testConfig().flagPepper, `CYFLAG-${id}`);
   await db.challenge.create({
-    data: { id, number, title: id, description: id, category: 'WEB', difficulty: 2, points, flagHash: hash, flagSalt: salt, port: null, released: true },
+    data: { id, title: id, description: id, category: 'WEB', points, flagHash: hash, flagSalt: salt, port: null, released: true },
   });
 }
 
@@ -26,8 +26,8 @@ describe('getLeaderboard ranking', () => {
     const a = await addUser(db, 'Alpha', 'z3r0d4y');
     const b = await addUser(db, 'Bravo', 'z3r0d4y');
     const cUser = await addUser(db, 'Charlie', 'n0-tr4c3');
-    await challenge('web1', 100, 1);
-    await challenge('web2', 200, 2);
+    await challenge('web1', 100);
+    await challenge('web2', 200);
 
     // Alpha: 300 (both), last solve 10:02
     await solve(a.id, 'web1', 100, '2026-01-01T10:00:00Z');
@@ -47,7 +47,7 @@ describe('getLeaderboard ranking', () => {
   it('breaks a score tie by fewer wrong submissions', async () => {
     const a = await addUser(db, 'Alpha', 'z3r0d4y');
     const b = await addUser(db, 'Bravo', 'z3r0d4y');
-    await challenge('web1', 100, 1);
+    await challenge('web1', 100);
     await solve(a.id, 'web1', 100, '2026-01-01T10:00:00Z');
     await solve(b.id, 'web1', 100, '2026-01-01T10:00:00Z');
     // Alpha has a wrong submission; Bravo does not -> Bravo ranks first.
@@ -61,8 +61,8 @@ describe('getLeaderboard ranking', () => {
     const a = await addUser(db, 'Alpha', 'z3r0d4y');
     const b = await addUser(db, 'Bravo', 'z3r0d4y');
     const cUser = await addUser(db, 'Charlie', 'n0-tr4c3');
-    await challenge('web1', 100, 1);
-    await challenge('web2', 200, 2);
+    await challenge('web1', 100);
+    await challenge('web2', 200);
     await solve(a.id, 'web1', 100, '2026-01-01T10:00:00Z');
     await solve(b.id, 'web2', 200, '2026-01-01T10:01:00Z');
     await solve(cUser.id, 'web1', 100, '2026-01-01T10:00:00Z');
@@ -77,7 +77,7 @@ describe('getLeaderboard ranking', () => {
   it('counts each challenge once per team under TEAM_SCORING=unique', async () => {
     const a = await addUser(db, 'Alpha', 'z3r0d4y');
     const b = await addUser(db, 'Bravo', 'z3r0d4y');
-    await challenge('web1', 100, 1);
+    await challenge('web1', 100);
     // both solved the same challenge -> sum would be 200, unique is 100
     await solve(a.id, 'web1', 100, '2026-01-01T10:00:00Z');
     await solve(b.id, 'web1', 100, '2026-01-01T10:01:00Z');

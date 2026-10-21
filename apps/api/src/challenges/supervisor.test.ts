@@ -3,6 +3,7 @@ import { createServer } from 'node:net';
 import { request as httpRequest } from 'node:http';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { RETIRED_CHALLENGE_IDS } from './retired';
 import { ChallengeSupervisor } from './supervisor';
 import { API_ROOT } from '../db-url';
 import { createLogger } from '../lib/logger';
@@ -81,6 +82,27 @@ d('ChallengeSupervisor (integration)', () => {
       if (status !== 200) await sleep(250);
     }
     expect(status).toBe(200);
+  }, 30_000);
+
+  it('runs the net5 HTTP service (Capture Viewer) and frees its port on stop', async () => {
+    sup = new ChallengeSupervisor(testDb(), testConfig(), createLogger(testConfig()));
+    const port = await freePort();
+    await sup.start('net5', port);
+    expect(sup.isRunning('net5')).toBe(true);
+    expect(await get(port)).toBe(200);
+    await sup.stop('net5');
+    await sleep(500);
+    expect(await get(port)).toBe(0);
+  }, 30_000);
+
+  it('never starts a retired challenge', async () => {
+    sup = new ChallengeSupervisor(testDb(), testConfig(), createLogger(testConfig()));
+    const port = await freePort();
+    for (const cid of RETIRED_CHALLENGE_IDS) {
+      await sup.start(cid, port);
+      expect(sup.isRunning(cid)).toBe(false);
+    }
+    expect(await get(port)).toBe(0);
   }, 30_000);
 
   it('stopAll leaves no child processes', async () => {

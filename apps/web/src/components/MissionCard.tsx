@@ -2,7 +2,6 @@ import type { MissionState, MissionSummary } from '@cydemic/shared';
 import { User } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { Button } from './ui/Button';
-import { DifficultyDots } from './ui/DifficultyDots';
 import { CategoryPill, StatusLabel } from './ui/Pill';
 
 interface MissionCardProps {
@@ -63,8 +62,7 @@ export function MissionCard({ mission, onOpen }: MissionCardProps) {
         {mission.description ?? PLACEHOLDER[state] ?? 'Briefing unlocks when this mission becomes available.'}
       </p>
 
-      <div className="mt-3.5 flex items-center justify-between gap-3">
-        <DifficultyDots value={mission.difficulty} />
+      <div className="mt-3.5 flex items-center justify-end gap-3">
         <div className="flex items-center gap-4">
           <span className="inline-flex items-center gap-1 font-mono text-sm text-ink/65" title="Solvers">
             <User className="size-3.5" aria-hidden="true" />

@@ -12,7 +12,6 @@ import {
   Button,
   CategoryPill,
   Chip,
-  DifficultyDots,
   HeroName,
   Input,
   Kicker,
@@ -33,28 +32,27 @@ import {
  */
 
 const desc = 'Short description of the mission goes here in two lines at most.';
-const m = (number: number, category: string, difficulty: number, points: number, state: MissionSummary['state'], solves: number): MissionSummary => ({
+const m = (number: number, category: string, points: number, state: MissionSummary['state'], solves: number): MissionSummary => ({
   id: `demo-${number}`,
   number,
   title: 'Mission placeholder',
   description: desc,
   category,
-  difficulty,
   points,
   state,
   solves,
 });
 
 const missions: MissionSummary[] = [
-  m(1, 'Web', 3, 100, 'solved', 12),
-  m(2, 'Web', 4, 200, 'available', 7),
-  m(3, 'Network', 3, 300, 'available', 9),
-  m(4, 'Web', 2, 400, 'available', 15),
-  m(5, 'Network', 5, 500, 'locked', 0),
-  m(6, 'Web', 4, 250, 'locked', 0),
-  m(7, 'Network', 2, 150, 'available', 11),
-  m(8, 'Web', 3, 350, 'available', 6),
-  m(9, 'Network', 5, 450, 'locked', 0),
+  m(1, 'Web', 100, 'solved', 12),
+  m(2, 'Web', 200, 'available', 7),
+  m(3, 'Network', 300, 'available', 9),
+  m(4, 'Web', 400, 'available', 15),
+  m(5, 'Network', 500, 'locked', 0),
+  m(6, 'Web', 250, 'locked', 0),
+  m(7, 'Network', 150, 'available', 11),
+  m(8, 'Web', 350, 'available', 6),
+  m(9, 'Network', 450, 'locked', 0),
 ];
 
 const leaderboard: LeaderboardRow[] = [
@@ -207,7 +205,7 @@ export default function DesignSystemPage() {
           </Panel>
 
           <Panel>
-            <Kicker as="h3">Categories, states, difficulty</Kicker>
+            <Kicker as="h3">Categories and states</Kicker>
             <div className="mt-3 flex flex-wrap gap-2">
               {['Web', 'Network', 'Crypto', 'Forensics', 'Pwn', 'Reversing', 'OSINT', 'Misc', 'New category'].map((c) => (
                 <CategoryPill key={c} category={c} />
@@ -217,11 +215,6 @@ export default function DesignSystemPage() {
               <StatusLabel state="available" />
               <StatusLabel state="solved" />
               <StatusLabel state="locked" />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-5">
-              {[1, 3, 5].map((d) => (
-                <DifficultyDots key={d} value={d} />
-              ))}
             </div>
           </Panel>
 
@@ -290,7 +283,6 @@ export default function DesignSystemPage() {
         <div className="mb-4 flex flex-wrap items-center gap-4">
           <CategoryPill category="Web" />
           <span className="font-mono text-base font-semibold">+100 XP</span>
-          <DifficultyDots value={3} />
         </div>
         <p className="text-body text-ink/80">
           Placeholder mission briefing. The detail view, hints, attachments and flag submission are wired up in Phase 4.

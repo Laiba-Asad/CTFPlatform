@@ -54,12 +54,17 @@ try {
     row('Event', 'not configured');
   }
   row('Challenges', `${h.challenges.released} released of ${h.challenges.total}`);
+  // Expected services: every challenge with a port (web + net4). Retired ones never count.
+  const expected = h.challenges.withService ?? 0;
   if (h.services.supervising) {
-    row('Services', `${h.services.up} up, ${h.services.starting} starting, ${h.services.down} down`);
+    row('Services', `${h.services.up} up, ${h.services.starting} starting, ${h.services.down} down (${h.services.detail.length} released of ${expected} with a service)`);
     const bad = h.services.detail.filter((s) => s.status !== 'up');
     if (bad.length) row('  needs attention', bad.map((s) => `${s.id}:${s.status}`).join(', '));
   } else {
     row('Services', 'supervisor not running (CHALLENGES_ENABLED=false or no venv/.flags.env)');
+  }
+  if (h.challenges.retiredInDatabase?.length) {
+    row('  retired in DB', `${h.challenges.retiredInDatabase.join(', ')} (run npm run challenges:retire)`);
   }
   console.log('');
   process.exit(h.status === 'ok' ? 0 : 2);

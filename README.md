@@ -4,8 +4,8 @@ Capture-the-flag competition platform for Cydemic.
 
 > **Status: Phase 2 + 2B + 2C (Auth, teams, challenges, LAN).** Open-join login
 > (players create themselves on first login), sessions, CSRF, LAN deployment
-> settings, team badges, the dashboard and profile, all 15 challenges imported
-> and hardened (web services + net captures), flag submission with scoring, and
+> settings, team badges, the dashboard and profile, 15 beginner-friendly challenges
+> (browser-only, 15 services), flag submission with scoring, and
 > admin release control. The leaderboard, achievements and admin UI arrive in
 > later phases.
 
@@ -36,7 +36,7 @@ anything, copy `.env.example` to `.env`; every variable is documented there.
 |---|---|
 | `npm run dev` | Starts the API first, waits for `/api/health`, then the web dev server. Names the process holding a busy port; Ctrl+C stops both cleanly |
 | `npm run doctor` | Prints platform health as a table (DB, event state, released challenges, per-service up/down) |
-| `npm run start` | Builds and serves the web app + API from one port (`SERVE_PORT`, default 8080) for the LAN |
+| `npm run start` | Dev single-port preview: builds and serves web + API from one port (`SERVE_PORT`, default 8080). For the event use `npm run start:prod` |
 | `npm test` | Brand + security checks and all unit/API/web tests (throwaway SQLite DB) |
 | `npm run typecheck` | TypeScript across all workspaces |
 | `npm run build` | Production builds of API (server + scripts) and web |
@@ -52,8 +52,8 @@ anything, copy `.env.example` to `.env`; every variable is documented there.
 | `npm run test:e2e` | End-to-end browser journeys (Playwright, Chromium) on a separate DB and port; saves screenshots to `apps/web/e2e-screenshots/` |
 | `npm run join-link` | Print the LAN join link and a QR code for players |
 | `npm run challenges:setup` | Create the Python venv for the challenge services |
-| `npm run challenges:captures` | Generate + verify the net1/net2 capture files |
-| `npm run flag:hash` | Write `seed/challenges.json` (salted HMACs) from meta + `.flags.env` |
+| `npm run flag:hash` | Write `seed/challenges.json` (salted HMACs) from meta + `.flags.env`; `-- --check` verifies the hashes instead (OK/MISMATCH per id, no values) |
+| `npm run challenges:retire` | Remove the retired challenges (and their solves/submissions/hints/attachments) from an existing database. Backs up first, prints the counts |
 | `npm run db:pg-sync -- <name>` | Regenerate the PostgreSQL schema/migration after a schema change |
 
 ## Event state (one source of truth)
@@ -134,19 +134,31 @@ countdown never depends on a player's device.
 
 ## Challenges and challenge services
 
-The platform ships 15 challenges (13 web, 2 network), each imported from the
-prior CTF and hardened. The web challenges run as small Python (Flask +
-waitress) services, one OS process per challenge, supervised by the API. The
-network challenges are pcapng captures served through an authorized route.
+The board has **15 challenges worth 2,250 points**, chosen so beginners can win
+on a one-hour clock. **Every challenge is solvable with just a web browser and
+its built-in DevTools** (plus the in-site Toolkit decoder) - no Burp, nmap,
+Wireshark, curl or anything to install. The 15 services (ports 5001, 5002,
+5014-5026) run as small Python (Flask + waitress) services, one OS process per
+challenge, supervised by the API.
+
+Players see points ("+100 XP"), category, solver count and state, never a
+difficulty level. The board is ordered by points ascending, then challenge id;
+the visible "MISSION 01..15" number is only that position (never stored).
+
+Fifteen harder or tool-dependent challenges were retired across phases (web3-web13
+except the kept ones, net1-net4). Their source is kept, inert, in
+`challenge-services/_retired/` (see its README to restore one); nothing seeds,
+starts or expects them, and `npm run challenges:retire` removes them from an
+existing database.
 
 ### One-time setup (in order)
 
 ```bash
 npm install                       # workspaces + Prisma client
 npm run challenges:setup          # create challenge-services/.venv, install pinned deps
-# Import the challenge flags/secrets into the git-ignored .flags.env:
+# Create the git-ignored .flags.env (imports web1/web2 from the old code and
+# generates fresh flags for the browser-only challenges); --update adds missing ones:
 python challenge-services/build_flags_env.py <path-to-old/app.py>
-npm run challenges:captures       # generate + verify net1/net2 pcapng files
 npm run flag:hash                 # write seed/challenges.json (salted HMACs; no plaintext)
 npm run dev                       # applies migrations, seeds, runs API + web
 ```
@@ -162,14 +174,14 @@ re-run `npm run flag:hash` (then re-seed) before the event.
 - Plaintext flags live only in `challenge-services/.flags.env` (git-ignored) and
   are passed to each challenge process through its environment. They never enter
   the repo, the platform database (only salted HMACs), API responses or logs.
-- The capture generator reads flags from `.flags.env`; `net2`'s flag is split
-  across packets so it is never contiguous in the file bytes.
+- `ORGANIZER-ANSWER-KEY.md` (repo root) is the organizer's local answer key with
+  every flag and intended solution. It is git-ignored, and `npm run check:static`
+  fails the build if it is ever tracked.
 
 ### Release control
 
 Each challenge is **released** (unlocked) or locked, stored in the database and
-surviving restarts. Releasing a web challenge starts its service; locking stops
-it. Organizers control this from the **Missions** page of the admin dashboard
+surviving restarts. Releasing a challenge starts its service; locking stops it. New challenges are seeded locked. Organizers control this from the **Missions** page of the admin dashboard
 (see below). For local dev, `AUTO_UNLOCK_ALL=true` releases everything at seed
 time. The supervisor re-starts every released service after a platform restart
 and stops all of them (no orphans) on shutdown. Set `CHALLENGES_ENABLED=false`
@@ -228,28 +240,32 @@ by one shared function, so player and admin views can never disagree.
 
 ### Network and reverse-proxy notes (important for the server)
 
-- **Challenge ports (5001-5013) must be exposed directly, never through the
-  platform's reverse proxy.** `web4` trusts `X-Forwarded-For`, which a proxy
-  rewrites; proxying would also break the intended challenge. Players reach
-  targets at `http://<platform-host>:<port>/` (the target link is built in the
-  browser from the host the player used, never a hard-coded address).
-- `web11`/`web13` run on the same host as the platform, so platform session
-  cookies are httpOnly, CSRF is mandatory, and credentialed cross-origin
-  requests are rejected (tested). The platform session cookie name is unique
-  (`cydemic_session`) to avoid collisions with challenge cookies.
+- **Challenge ports (5001, 5002, 5014-5026) must be exposed directly, never
+  through the platform's reverse proxy.** Players reach targets at
+  `http://<platform-host>:<port>/` (the target link is built in the browser from
+  the host the player used, never a hard-coded address).
+- Challenge cookies use unique names (`secret_recipe`, `badge_level`). No service
+  reads, sets or clears a platform cookie (`cydemic_ctf_sid` and friends), which
+  a test proves. Platform session cookies are httpOnly, CSRF is mandatory, and
+  credentialed cross-origin requests are rejected.
 - Everything is self-hosted: no CDN or Google Fonts, so the platform and the
   challenge pages work on an offline LAN.
-- Scanners/automated tools: each service has a coarse in-flight concurrency cap
-  (default 8, `CHALLENGE_MAX_CONCURRENCY`) so one noisy player cannot freeze it.
+- Each service has a coarse in-flight concurrency cap (default 8,
+  `CHALLENGE_MAX_CONCURRENCY`) so one noisy player cannot freeze it.
 
 ### Tests
 
-- Python: `cd challenge-services && .venv/Scripts/python -m pytest` — per-challenge
-  solve tests, no-leak tests, per-visitor isolation (`web11`), the `web13` gate,
-  and static checks (no debugger, no command execution in `web08`, no external URLs).
-- Node: flag hashing, the challenges API (list/submit/rate-limit/cooldown/attachment),
-  admin release, and a supervisor integration test (start/serve/stop, crash-restart,
-  no orphans) that auto-skips until the venv and `.flags.env` exist.
+- Python: `cd challenge-services && .venv/Scripts/python -m pip install -r requirements-dev.txt`
+  once, then `.venv/Scripts/python -m pytest` - per-challenge solve tests (each
+  runs the exact HTTP the intended browser/DevTools action produces), a no-leak
+  test for each, a cookie-isolation test (no service touches a platform cookie),
+  a browser-only audit (no challenge needs an installed tool), and static checks
+  (no debugger, no command execution, no external URLs).
+- Node: flag hashing, the challenges API (list/submit/rate-limit/cooldown), admin
+  release, a supervisor integration test (start/serve/stop, crash-restart, no
+  orphans), and Playwright browser solve tests that drive a real Chromium through
+  the DevTools path of each browser-only challenge (auto-skip until the venv and
+  `.flags.env` exist).
 - `npm run check:static` fails the build on a plaintext flag literal in any tracked file,
   a debugger/reloader or command-execution API in the services, an external asset
   URL in the web app or challenge templates, or a tracked secret/generated file.
@@ -266,9 +282,10 @@ apps/
     src/components/ui/  component library
 packages/
   shared/         Logic and types shared by API and web (timer rules, name matching, API types)
-challenge-services/  Python package: web01-web13 Flask services, common.py, serve.py,
-                     generate_captures.py, templates/, tests. venv + .flags.env + generated/
-                     + runtime/ are git-ignored.
+challenge-services/  Python package: the active browser-only services (web01, web02,
+                     web14-web25, net5; see serve.MODULES), common.py, serve.py,
+                     templates/, tests; _retired/ holds the retired challenges (inert).
+                     venv + .flags.env + runtime/ are git-ignored.
 seed/             teams.json, event.json (placeholder dates),
                   challenges.meta.json (editable, no flags) -> challenges.json (hashes)
 deploy/           Caddy configs for the reverse proxy and the static web container
@@ -286,7 +303,7 @@ active or in progress. All tokens live in `apps/web/src/styles/theme.css`.
 |---|---|---|
 | `teal` | `#03DAAA` | Active nav item, timer, progress fill, "you" leaderboard row, solved card border |
 | `teal-dark` | `#027A5F` | Small labels on white (kickers, SOLVED); 5.3:1 on white |
-| `ink` | `#151515` | Text, primary (black) buttons, difficulty dots |
+| `ink` | `#151515` | Text, primary (black) buttons |
 | `black` | `#101114` | Top bar and sidebar only |
 | `bg` | `#F4F6F7` | Page background |
 | `white` | `#FFFFFF` | Cards |
@@ -300,7 +317,6 @@ theme, so off-brand hues, giant headlines and glows can't be produced by acciden
 | Available | White card, grey AVAILABLE label, black START pill |
 | Solved | Teal 1.5px border, teal-dark check + SOLVED, outlined VIEW pill |
 | Locked | Dashed border, card at 55% opacity, lock icon, dashed disabled button |
-| Difficulty | Ink-filled vs empty dots + EASY / MEDIUM / HARD |
 | Error / warning | Dashed / bold ink border with an icon, never red |
 
 Type (self-hosted via `@fontsource`): Anton **only** for the hero player name
@@ -314,11 +330,12 @@ shows a dashed placeholder with a person icon. Put images at
 
 `npm run check:brand` (part of `npm test`) fails on raw colors in components,
 shadows, text-shadow, gradients, blur, scanlines, HudCorner, the removed pixel
-font, type above 32px, thick borders, and Anton outside `Display.tsx`.
+font, type above 32px, thick borders, Anton outside `Display.tsx`, and any
+difficulty level (the word or the three old labels) in the web source.
 
 Accessibility: AA text contrast (checked for every text/background pair),
 2px teal focus outline with 2px offset, keyboard-operable components, native
-`<dialog>` modals, ARIA on timer/progress/difficulty, and animation (the
+`<dialog>` modals, ARIA on timer and progress, and animation (the
 final-10-minute timer blink) disabled under `prefers-reduced-motion`.
 
 ## Local server (LAN) deployment
@@ -327,6 +344,56 @@ The platform is built to run on a local server and be reached by players on the
 same network at the server's address (e.g. `http://192.168.1.50` or
 `http://ctf.local`). It does not need the public internet, Docker, or HTTPS.
 
+### Production on a Windows VM (the real event)
+
+For the event the platform runs in **production mode** on one Windows 10 VM, with
+the API serving the built web app on a single port. No dev server, no Vite, no
+Docker, no reverse proxy. Full walkthrough: **`docs/DEPLOY-WINDOWS-VM.md`**;
+one-page runbook: **`docs/EVENT-DAY-RUNBOOK.md`**; network setup:
+**`docs/NETWORK-CHECKLIST.md`**.
+
+On the VM, once:
+
+```bash
+npm ci
+npm run challenges:setup
+npm run prod:init -- --port 8080 --admin-ip <organizer-laptop-ip>   # writes .env (strong secrets, LAN IP), migrates, seeds, rehashes flags
+npm run admin:create                                                # organizer account (min 12 chars)
+# administrator PowerShell:
+powershell -ExecutionPolicy Bypass -File scripts\windows\open-firewall.ps1 -WebPort 8080
+npm run preflight                                                   # all PASS
+```
+
+Then start/stop the event by double-clicking **`start-event.cmd`** / **`stop-event.cmd`**
+(or `npm run start:prod` / `npm run stop:prod`). Players open **`http://<vm-ip>:8080`**.
+
+Production commands:
+
+| Command | What it does |
+|---|---|
+| `npm run prod:init` | One-time: write `.env` (random `SESSION_SECRET`/`FLAG_PEPPER`, detected LAN IP), migrate, seed (locked), rehash all 15 flags into the DB with the new pepper. Never overwrites `.env` without `--force` |
+| `npm run start:prod` | Build, check the port is free (names the holder if not), serve the web app + API on `WEB_PORT`, bound to `0.0.0.0`. Refuses to start on any unsafe config |
+| `npm run stop:prod` | Stop the API and every challenge service (tree-kill by port; no orphans) |
+| `npm run preflight` | Read-only PASS/FAIL go/no-go check (secrets, config, ports, firewall, DB, flags, services, admin password, disk, sleep, clock). Exits non-zero on any FAIL |
+| `npm run exposure-check -- http://<ip>:8080` | From another machine: confirm nothing sensitive is reachable and `/admin` is blocked from a non-allowed address |
+| `npm run backup` | Timestamped DB snapshot into `BACKUP_DIR` (keeps 20). Auto-runs every 10 min in production |
+| `npm run restore -- <file>` | Restore a snapshot (safety backup + integrity check + confirmation first) |
+| `npm run package:vm` | Build `dist/cydemic-ctf-vm.zip` for the VM; excludes the answer key, `.env`, databases, backups, `node_modules`, `_retired`, screenshots |
+| `npm run loadtest` | Simulate 40 players against a throwaway DB; reports errors, p50/p95 and memory |
+
+New production environment variables (see `.env.production.example`):
+
+- `WEB_PORT` (default 80; use **8080** on Windows to dodge the system port-80 service)
+- `ADMIN_ALLOWED_IPS` (exact IPs that may reach `/admin`; default `127.0.0.1,::1`;
+  everyone else gets **404** in production)
+- `BACKUP_DIR` (default `backups`; can point at a USB drive)
+- `TRUST_PROXY=false`, `COOKIE_SECURE=false` for a plain-HTTP LAN
+
+Production **refuses to start** if it would use the built-in dev secrets,
+`AUTO_UNLOCK_ALL=true`, `EVENT_MODE=live`, a weak/default admin password, or an
+unreset `admin:seed-dev` account - each prints the reason and the fix.
+
+
 Build and run without Docker:
 
 ```bash
@@ -334,7 +401,6 @@ Build and run without Docker:
 npm ci
 npm run challenges:setup
 python challenge-services/build_flags_env.py <path-to-old/app.py>   # or copy .flags.env over
-npm run challenges:captures
 # Set a real FLAG_PEPPER and SESSION_SECRET in .env, then:
 npm run flag:hash
 npm run build
@@ -371,10 +437,11 @@ FLAG_PEPPER=...                         # required; re-run flag:hash after setti
 ### Pre-event checklist
 
 - [ ] Server has a **fixed IP or hostname**; set `PUBLIC_URL`/`ALLOWED_ORIGINS` to it.
-- [ ] Firewall: open the web port and the challenge ports (5001-5013).
+- [ ] Firewall: open the web port and the challenge ports (5001, 5002, 5014-5026).
 - [ ] **Server clock is synced** (NTP) - the event timer is server-authoritative.
 - [ ] Disable sleep and automatic restarts/updates for the event window.
-- [ ] Set real `SESSION_SECRET` and `FLAG_PEPPER`, then `npm run flag:hash` and re-seed.
+- [ ] Set real `SESSION_SECRET` and `FLAG_PEPPER`, then `npm run flag:hash`, `npm run flag:hash -- --check` (all OK) and re-seed.
+- [ ] If the database predates the beginner board: `npm run challenges:retire` (backs up first), then `npm run doctor` shows no retired challenge.
 - [ ] Set the real event dates and `EVENT_MODE=scheduled` (`EVENT_START`/`EVENT_END`, or `seed/event.json`), then `npm run seed -- --update-event`. **Confirm the exact start time and duration with the organizers** — `.env.example` currently carries a placeholder window (22 Oct 2026, 10:00-14:00 +05:00).
 - [ ] Create at least one organizer account: `npm run admin:create`. Set `ADMIN_ALLOWED_SUBNETS` if organizers run the dashboard from the LAN (default is localhost only).
 - [ ] Drop real team badges into `apps/web/public/avatars/<team-id>.png` and the real logo.

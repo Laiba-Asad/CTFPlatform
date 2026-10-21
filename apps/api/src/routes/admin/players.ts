@@ -6,6 +6,7 @@ import { HttpError } from '../../lib/http-error';
 import { reqParam } from '../../lib/req';
 import { requireAdminRole } from '../../middleware/admin-auth';
 import { auditFromReq } from '../../services/audit';
+import { missionNumberMap } from '../../services/challenges';
 import { aggregatePlayers } from '../../services/scoring';
 import type { AdminDeps } from './index';
 import type { Db } from '../../lib/db';
@@ -173,11 +174,12 @@ async function playerDetail(db: Db, id: string): Promise<AdminPlayerDetail | nul
     db.scoreAdjustment.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' } }),
     db.auditLog.findMany({ where: { OR: [{ target: id }, { target: user.name }] }, orderBy: { createdAt: 'asc' } }),
   ]);
+  const numbers = await missionNumberMap(db);
   const score = solves.reduce((s, x) => s + x.points, 0) + adjustments.filter((a) => !a.reversedAt).reduce((s, a) => s + a.points, 0);
   const timeline: AdminPlayerDetail['timeline'] = [
     { at: user.createdAt.toISOString(), kind: 'join' as const, text: `Joined ${user.team.name}` },
-    ...solves.map((s) => ({ at: s.createdAt.toISOString(), kind: 'solve' as const, text: `Solved #${s.challenge.number} ${s.challenge.title} (+${s.points})` })),
-    ...wrongs.map((w) => ({ at: w.createdAt.toISOString(), kind: 'wrong' as const, text: `Wrong flag on #${w.challenge.number} ${w.challenge.title}` })),
+    ...solves.map((s) => ({ at: s.createdAt.toISOString(), kind: 'solve' as const, text: `Solved #${numbers.get(s.challengeId) ?? 0} ${s.challenge.title} (+${s.points})` })),
+    ...wrongs.map((w) => ({ at: w.createdAt.toISOString(), kind: 'wrong' as const, text: `Wrong flag on #${numbers.get(w.challengeId) ?? 0} ${w.challenge.title}` })),
     ...auditRows.map((a) => ({ at: a.createdAt.toISOString(), kind: 'admin' as const, text: `${a.action} by ${a.admin}` })),
   ].sort((x, y) => x.at.localeCompare(y.at));
 

@@ -11,6 +11,7 @@ import { normalizeDatabaseUrl } from '../db-url';
 import { createDb } from '../lib/db';
 import { hashPassword } from '../lib/password';
 import { audit } from '../services/audit';
+import { MIN_ADMIN_PASSWORD } from '../services/production-guards';
 import { promptLine, promptSecret, runScript } from './cli';
 
 function argValue(flag: string): string | undefined {
@@ -26,8 +27,8 @@ runScript(async () => {
     const account = await db.adminAccount.findUnique({ where: { usernameKey: username.toLowerCase() } });
     if (!account) throw new Error(`No admin named "${username}". Use admin:create to make one.`);
 
-    const password = await promptSecret('New password (min 8 chars, not shown): ');
-    if (password.length < 8) throw new Error('Password must be at least 8 characters.');
+    const password = await promptSecret(`New password (min ${MIN_ADMIN_PASSWORD} chars, not shown): `);
+    if (password.length < MIN_ADMIN_PASSWORD) throw new Error(`Password must be at least ${MIN_ADMIN_PASSWORD} characters.`);
     const again = await promptSecret('Confirm new password: ');
     if (password !== again) throw new Error('Passwords did not match. Nothing was changed.');
 

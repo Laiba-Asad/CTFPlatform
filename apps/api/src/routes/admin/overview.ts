@@ -1,4 +1,4 @@
-import type { AttentionItem, FeedItem, OverviewResponse, ServiceHealthRow } from '@cydemic/shared';
+import { type AttentionItem, type FeedItem, type OverviewResponse, type ServiceHealthRow, compareMissions } from '@cydemic/shared';
 import { Router } from 'express';
 import { getEventState } from '../../services/event';
 import { getEffectiveSettings } from '../../services/settings';
@@ -16,14 +16,17 @@ export function overviewAdminRouter({ db, config, supervisor }: AdminDeps) {
     const settings = await getEffectiveSettings(db, config);
     const twoMinAgo = new Date(Date.now() - 2 * 60_000);
 
-    const [players, activePlayers, totalSolves, totalWrong, challenges, aggs] = await Promise.all([
+    const [players, activePlayers, totalSolves, totalWrong, rawChallenges, aggs] = await Promise.all([
       db.user.count({ where: { role: 'player' } }),
       db.user.count({ where: { role: 'player', lastSeenAt: { gte: twoMinAgo } } }),
       db.solve.count(),
       db.submission.count({ where: { correct: false } }),
-      db.challenge.findMany({ orderBy: { number: 'asc' } }),
+      db.challenge.findMany(),
       aggregatePlayers(db),
     ]);
+    // Board order (points, then id); the display number is the position, never stored.
+    const challenges = [...rawChallenges].sort(compareMissions).map((c, i) => ({ ...c, number: i + 1 }));
+    const numbers = new Map(challenges.map((c) => [c.id, c.number]));
 
     // per-team
     const teamMap = new Map<string, { teamId: string; teamName: string; players: number; score: number }>();
@@ -42,7 +45,7 @@ export function overviewAdminRouter({ db, config, supervisor }: AdminDeps) {
       .filter((c) => c.port)
       .map((c) => ({ id: c.id, title: c.title, port: c.port, status: serviceStatus(supervisor, c) }));
 
-    const [feed, attention] = await Promise.all([buildFeed(db), buildAttention(db, config, supervisor, challenges)]);
+    const [feed, attention] = await Promise.all([buildFeed(db, numbers), buildAttention(db, config, supervisor, challenges, numbers)]);
 
     const body: OverviewResponse = {
       event: {
@@ -80,7 +83,7 @@ function serviceStatus(sup: AdminSupervisor | undefined, c: { id: string; port: 
   return sup.serviceStatus(c.id);
 }
 
-async function buildFeed(db: Db): Promise<FeedItem[]> {
+async function buildFeed(db: Db, numbers: Map<string, number>): Promise<FeedItem[]> {
   const [solves, wrongs, joins, admin] = await Promise.all([
     db.solve.findMany({ orderBy: { createdAt: 'desc' }, take: 15, include: { user: { include: { team: true } }, challenge: true } }),
     db.submission.findMany({ where: { correct: false }, orderBy: { createdAt: 'desc' }, take: 15, include: { user: { include: { team: true } }, challenge: true } }),
@@ -88,8 +91,8 @@ async function buildFeed(db: Db): Promise<FeedItem[]> {
     db.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 15 }),
   ]);
   const items: FeedItem[] = [
-    ...solves.map((s) => ({ id: `s-${s.id}`, kind: 'solve' as const, at: s.createdAt.toISOString(), text: `${s.user.name} (${s.user.team.name}) solved #${s.challenge.number} ${s.challenge.title}` })),
-    ...wrongs.map((w) => ({ id: `w-${w.id}`, kind: 'wrong' as const, at: w.createdAt.toISOString(), text: `${w.user.name} (${w.user.team.name}) wrong on #${w.challenge.number} ${w.challenge.title}` })),
+    ...solves.map((s) => ({ id: `s-${s.id}`, kind: 'solve' as const, at: s.createdAt.toISOString(), text: `${s.user.name} (${s.user.team.name}) solved #${numbers.get(s.challengeId) ?? 0} ${s.challenge.title}` })),
+    ...wrongs.map((w) => ({ id: `w-${w.id}`, kind: 'wrong' as const, at: w.createdAt.toISOString(), text: `${w.user.name} (${w.user.team.name}) wrong on #${numbers.get(w.challengeId) ?? 0} ${w.challenge.title}` })),
     ...joins.map((u) => ({ id: `j-${u.id}`, kind: 'join' as const, at: u.createdAt.toISOString(), text: `${u.name} joined ${u.team.name}` })),
     ...admin.map((a) => ({ id: `a-${a.id}`, kind: 'admin' as const, at: a.createdAt.toISOString(), text: `${a.admin}: ${a.action}${a.target ? ` (${a.target})` : ''}` })),
   ];
@@ -101,6 +104,7 @@ async function buildAttention(
   config: AppConfig,
   sup: AdminSupervisor | undefined,
   challenges: Array<{ id: string; number: number; title: string; port: number | null; flagHash: string; flagSalt: string }>,
+  numbers: Map<string, number>,
 ): Promise<AttentionItem[]> {
   const out: AttentionItem[] = [];
   const fiveMinAgo = new Date(Date.now() - 5 * 60_000);
@@ -116,7 +120,7 @@ async function buildAttention(
   const recentWrongRows = await db.submission.findMany({ where: { correct: false, text: { not: null }, createdAt: { gte: fiveMinAgo } }, include: { user: true, challenge: true }, take: 100 });
   for (const w of recentWrongRows) {
     const match = challenges.find((c) => c.id !== w.challengeId && w.text && verifyFlag(config.flagPepper, c.flagSalt, c.flagHash, w.text));
-    if (match) out.push({ level: 'warn', text: `${w.user.name}'s wrong guess on #${w.challenge.number} matches another mission's flag` });
+    if (match) out.push({ level: 'warn', text: `${w.user.name}'s wrong guess on #${numbers.get(w.challengeId) ?? 0} matches another mission's flag` });
   }
 
   // Many new players from one IP (possible abuse).

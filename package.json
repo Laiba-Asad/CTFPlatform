@@ -32,7 +32,18 @@
     "join-link": "npm run join-link -w @cydemic/api --",
     "db:pg-sync": "npm run db:pg-sync -w @cydemic/api --",
     "challenges:setup": "node scripts/setup-challenges.mjs",
-    "challenges:captures": "node scripts/run-python.mjs generate_captures.py"
+    "challenges:captures": "node scripts/run-python.mjs generate_captures.py",
+    "challenges:retire": "npm run challenges:retire -w @cydemic/api --",
+    "start:prod": "node scripts/start-prod.mjs",
+    "stop:prod": "node scripts/stop-prod.mjs",
+    "prod:init": "node scripts/prod-init.mjs",
+    "prod:rehash": "npm run prod:rehash -w @cydemic/api --",
+    "preflight": "npm run preflight -w @cydemic/api --",
+    "exposure-check": "node scripts/exposure-check.mjs",
+    "backup": "npm run backup -w @cydemic/api --",
+    "restore": "npm run restore -w @cydemic/api --",
+    "package:vm": "node scripts/package-vm.mjs",
+    "loadtest": "node scripts/loadtest.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { aggregatePlayers, rankPlayers } from '../../services/scoring';
 import { getLeaderboard } from '../../services/leaderboard';
 import { auditFromReq } from '../../services/audit';
+import { missionNumberMap } from '../../services/challenges';
 import { toCsv } from './submissions';
 import type { AdminDeps } from './index';
 
@@ -37,10 +38,13 @@ export function exportAdminRouter({ db, config }: AdminDeps) {
   });
 
   router.get('/solves.csv', async (req, res) => {
-    const solves = await db.solve.findMany({ orderBy: { createdAt: 'asc' }, include: { user: { include: { team: true } }, challenge: true } });
+    const [solves, numbers] = await Promise.all([
+      db.solve.findMany({ orderBy: { createdAt: 'asc' }, include: { user: { include: { team: true } }, challenge: true } }),
+      missionNumberMap(db),
+    ]);
     const rows = [
       ['time', 'player', 'team', 'mission', 'points'],
-      ...solves.map((s) => [s.createdAt.toISOString(), s.user.name, s.user.team.name, `#${s.challenge.number} ${s.challenge.title}`, s.points]),
+      ...solves.map((s) => [s.createdAt.toISOString(), s.user.name, s.user.team.name, `#${numbers.get(s.challenge.id) ?? 0} ${s.challenge.title}`, s.points]),
     ];
     await auditFromReq(db, req, 'export.solves');
     csv(res, 'solves.csv', rows);

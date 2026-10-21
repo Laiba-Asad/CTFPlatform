@@ -84,7 +84,6 @@ export interface AdminMissionRow {
   title: string;
   category: string;
   points: number;
-  difficulty: number;
   released: boolean;
   releaseAt: string | null;
   port: number | null;

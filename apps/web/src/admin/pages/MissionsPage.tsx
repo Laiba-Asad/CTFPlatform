@@ -1,6 +1,7 @@
 import type { AdminMissionRow } from '@cydemic/shared';
 import { useState } from 'react';
 import { Button, Input, Kicker, Modal, Notice, Panel } from '../../components/ui';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AdminPageTitle, EmptyRow, StatusDot, Table, Td, Th, useActionToast } from '../components/parts';
 import { adminApi } from '../lib/adminApi';
 import { adminKeys, useAdminMutation, useMissions } from '../lib/hooks';
@@ -10,6 +11,7 @@ export function MissionsPage({ role }: { role: 'admin' | 'viewer' }) {
   const { ok, fail } = useActionToast();
   const readonly = role !== 'admin';
   const [editing, setEditing] = useState<AdminMissionRow | null>(null);
+  const [bulkAction, setBulkAction] = useState<'release-all' | 'lock-all' | null>(null);
 
   const inval = [adminKeys.missions, adminKeys.overview, adminKeys.leaderboard];
   const release = useAdminMutation((v: { id: string; released: boolean }) => adminApi(`/missions/${v.id}/release`, { method: 'POST', body: { released: v.released } }), inval);
@@ -18,15 +20,23 @@ export function MissionsPage({ role }: { role: 'admin' | 'viewer' }) {
 
   const act = (p: Promise<unknown>, msg: string) => p.then(() => ok(msg)).catch(fail);
 
+  const missions = data?.missions ?? [];
+  const releasedCount = missions.filter((m) => m.released).length;
+  const servicesUp = missions.filter((m) => m.serviceStatus === 'up').length;
+  const withService = missions.filter((m) => m.port !== null).length;
+
   return (
     <div>
       <AdminPageTitle title="Missions">
         {!readonly && (
           <>
-            <Button variant="secondary" size="sm" disabled={bulk.isPending} onClick={() => act(bulk.mutateAsync('release-all'), 'All missions released.')}>
+            <span className="mr-1 font-mono text-xs text-ink/60">
+              {releasedCount}/{missions.length} released · {servicesUp}/{withService} services up
+            </span>
+            <Button variant="secondary" size="sm" disabled={bulk.isPending} onClick={() => setBulkAction('release-all')}>
               Release all
             </Button>
-            <Button variant="secondary" size="sm" disabled={bulk.isPending} onClick={() => act(bulk.mutateAsync('lock-all'), 'All missions locked.')}>
+            <Button variant="secondary" size="sm" disabled={bulk.isPending} onClick={() => setBulkAction('lock-all')}>
               Lock all
             </Button>
           </>
@@ -34,6 +44,27 @@ export function MissionsPage({ role }: { role: 'admin' | 'viewer' }) {
       </AdminPageTitle>
 
       {readonly && <Notice tone="info" className="mb-4">Viewer access — mission controls are disabled.</Notice>}
+
+      <ConfirmDialog
+        open={bulkAction !== null}
+        onClose={() => setBulkAction(null)}
+        title={bulkAction === 'lock-all' ? 'Lock every mission?' : 'Release every mission?'}
+        kicker="Confirm"
+        confirmLabel={bulkAction === 'lock-all' ? 'Lock all' : 'Release all'}
+        tone={bulkAction === 'lock-all' ? 'danger' : 'default'}
+        loading={bulk.isPending}
+        onConfirm={() => {
+          if (!bulkAction) return;
+          const msg = bulkAction === 'lock-all' ? 'All missions locked.' : 'All missions released.';
+          return act(bulk.mutateAsync(bulkAction), msg).finally(() => setBulkAction(null));
+        }}
+      >
+        {bulkAction === 'lock-all' ? (
+          <p>This locks all {missions.length} missions and stops their services. Players will see them as locked. This is recorded in the audit log.</p>
+        ) : (
+          <p>This releases all {missions.length} missions and starts their services. Missions still stay closed until you press <strong>Start event now</strong>. This is recorded in the audit log.</p>
+        )}
+      </ConfirmDialog>
 
       {isPending || !data ? (
         <Panel><p className="text-ink/60">Loading…</p></Panel>
@@ -110,7 +141,6 @@ function EditMissionModal({ mission, readonly, onClose }: { mission: AdminMissio
   const { ok, fail } = useActionToast();
   const [title, setTitle] = useState(mission.title);
   const [points, setPoints] = useState(String(mission.points));
-  const [difficulty, setDifficulty] = useState(String(mission.difficulty));
   const save = useAdminMutation(
     (body: Record<string, unknown>) => adminApi(`/missions/${mission.id}`, { method: 'PATCH', body }),
     [adminKeys.missions, adminKeys.overview, adminKeys.leaderboard],
@@ -131,7 +161,7 @@ function EditMissionModal({ mission, readonly, onClose }: { mission: AdminMissio
               loading={save.isPending}
               onClick={() =>
                 save
-                  .mutateAsync({ title, points: Number(points), difficulty: Number(difficulty) })
+                  .mutateAsync({ title, points: Number(points) })
                   .then(() => { ok('Mission updated. Scores recomputed from solves.'); onClose(); })
                   .catch(fail)
               }
@@ -146,7 +176,6 @@ function EditMissionModal({ mission, readonly, onClose }: { mission: AdminMissio
         <Input label="Title" value={title} disabled={readonly} onChange={(e) => setTitle(e.target.value)} />
         <div className="grid grid-cols-2 gap-3">
           <Input label="Points" type="number" min={0} value={points} disabled={readonly} onChange={(e) => setPoints(e.target.value)} hint="Changing points recomputes every solver's score." />
-          <Input label="Difficulty (1–5)" type="number" min={1} max={5} value={difficulty} disabled={readonly} onChange={(e) => setDifficulty(e.target.value)} />
         </div>
         <Kicker>First solve</Kicker>
         <p className="text-base text-ink/70">{mission.firstSolveAt ? new Date(mission.firstSolveAt).toLocaleString() : 'Not solved yet.'}</p>

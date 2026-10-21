@@ -24,7 +24,7 @@ runScript(async () => {
 
     // A simple, always-available challenge (no service port) with a known flag.
     const { salt, hash } = hashFlag(config.flagPepper, E2E_FLAG);
-    const base = { number: 1, title: 'Warmup', description: 'Submit the demo flag to score.', category: 'WEB', difficulty: 1, points: 100, flagHash: hash, flagSalt: salt, port: null, released: true, visible: true };
+    const base = { title: 'Warmup', description: 'Submit the demo flag to score.', category: 'WEB', points: 100, flagHash: hash, flagSalt: salt, port: null, released: true, visible: true };
     await db.challenge.upsert({ where: { id: 'web1' }, create: { id: 'web1', ...base }, update: base });
 
     const username = process.env.E2E_ADMIN_USER;

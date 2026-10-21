@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lux Gear - Checkout</title>
+<style>
+  body { font-family: Tahoma, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 16px; color: #222; background: #f6f6f2; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; }
+</style>
+</head>
+<body>
+<h1>Lux Gear</h1>
+<div class="box">
+{% if error %}
+  <p>{{ error }}</p>
+{% elif flag %}
+  <h2>Order confirmed</h2>
+  <p>{{ item.name }} for ${{ paid }}. What a bargain! Confirmation code: {{ flag }}</p>
+{% else %}
+  <h2>Payment declined</h2>
+  <p>Your card was declined for ${{ paid }}. Please try another card.</p>
+{% endif %}
+  <p><a href="/">Back to the shop</a></p>
+</div>
+</body>
+</html>

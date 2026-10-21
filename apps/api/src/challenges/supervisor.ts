@@ -3,10 +3,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createConnection } from 'node:net';
 import { request as httpRequest } from 'node:http';
 import { join, resolve } from 'node:path';
+import { compareMissions } from '@cydemic/shared';
 import type { Logger } from 'pino';
 import type { AppConfig } from '../config';
 import { API_ROOT } from '../db-url';
 import type { Db } from '../lib/db';
+import { isRetired } from './retired';
 
 const SERVICES_DIR = resolve(API_ROOT, '../..', 'challenge-services');
 const FLAGS_ENV = join(SERVICES_DIR, '.flags.env');
@@ -24,15 +26,17 @@ interface Managed {
 
 /**
  * Starts and stops the Python challenge services as child processes, one per
- * released web challenge. Each waitress process is a single OS process (no
- * grandchildren), so killing the child stops it cleanly with no orphans.
+ * released challenge that has a port (every challenge on the board runs an HTTP
+ * service; capture-file challenges, if any, have no port and no service). Killing the
+ * child stops its waitress process cleanly with no orphans (on Windows the venv
+ * launcher takes its interpreter down with it).
  *
  * State lives in the database (Challenge.released); on platform start we launch
  * every released service, and on shutdown we stop them all.
  */
 export class ChallengeSupervisor {
   private readonly managed = new Map<string, Managed>();
-  /** Released web challenges that have exhausted restarts (shown as unavailable). */
+  /** Released services that have exhausted restarts (shown as unavailable). */
   private readonly failed = new Set<string>();
   private readonly flags: Record<string, string>;
   private readonly python: string;
@@ -58,7 +62,7 @@ export class ChallengeSupervisor {
   }
 
   /**
-   * Health of a released web challenge's service. When the supervisor is not
+   * Health of a released challenge's service. When the supervisor is not
    * managing services (disabled or no venv), callers should treat challenges as
    * available rather than down.
    */
@@ -68,7 +72,7 @@ export class ChallengeSupervisor {
     return 'down';
   }
 
-  /** Launch every released web challenge. Called once at startup. */
+  /** Launch every released challenge that has a service. Called once at startup. */
   async startReleased(): Promise<void> {
     if (!this.config.challenges.enabled) return;
     if (!this.available) {
@@ -79,12 +83,16 @@ export class ChallengeSupervisor {
       where: { released: true, port: { not: null } },
       select: { id: true, port: true },
     });
-    for (const c of released) await this.start(c.id, c.port!);
+    for (const c of released) if (!isRetired(c.id)) await this.start(c.id, c.port!);
   }
 
   async start(cid: string, port: number): Promise<void> {
     if (!this.available || this.managed.has(cid)) return;
-    if (!/^web\d+$/.test(cid)) return; // net challenges are files, not services
+    if (isRetired(cid)) return; // retired challenges are never started
+    if (!this.flags[`FLAG_${cid}`]) {
+      this.logger.error({ cid }, `no FLAG_${cid} in .flags.env; not starting challenge`);
+      return;
+    }
     if (await inUse(port)) {
       this.logger.error({ cid, port }, 'port already in use; not starting challenge');
       return;
@@ -151,10 +159,10 @@ export class ChallengeSupervisor {
       MAX_CONCURRENCY: String(this.config.challenges.maxConcurrency),
       CHALLENGE_SECRET_VISITOR_KEY: this.flags.VISITOR_KEY ?? '',
     };
-    if (cid === 'web5') env.CHALLENGE_SECRET_JWT_SECRET = this.flags.WEB5_JWT_SECRET ?? '';
-    if (cid === 'web9') {
-      env.CHALLENGE_SECRET_OTP = this.flags.WEB9_OTP ?? '';
-      env.CHALLENGE_SECRET_PHONE = this.flags.WEB9_PHONE ?? '';
+    // Per-challenge extras: WEB5_JWT_SECRET -> CHALLENGE_SECRET_JWT_SECRET for web5 only, etc.
+    const prefix = `${cid.toUpperCase()}_`;
+    for (const [key, value] of Object.entries(this.flags)) {
+      if (key.startsWith(prefix)) env[`CHALLENGE_SECRET_${key.slice(prefix.length)}`] = value;
     }
     return env;
   }
@@ -198,15 +206,15 @@ export class ChallengeSupervisor {
     this.managed.clear();
   }
 
-  /** Per-service health of released web challenges, for /api/health and doctor. */
+  /** Per-service health of released challenges with a service, for /api/health and doctor. */
   async healthSummary(): Promise<{ supervising: boolean; services: Array<{ id: string; status: ServiceStatus }> }> {
     if (!this.supervising) return { supervising: false, services: [] };
     const released = await this.db.challenge.findMany({
       where: { released: true, port: { not: null } },
-      select: { id: true },
-      orderBy: { number: 'asc' },
+      select: { id: true, points: true },
     });
-    return { supervising: true, services: released.map((c) => ({ id: c.id, status: this.serviceStatus(c.id) })) };
+    const services = released.filter((c) => !isRetired(c.id)).sort(compareMissions);
+    return { supervising: true, services: services.map((c) => ({ id: c.id, status: this.serviceStatus(c.id) })) };
   }
 }
 
@@ -240,11 +248,12 @@ function inUse(port: number): Promise<boolean> {
 function waitForHealth(port: number, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   const attempt = (resolveFn: () => void, rejectFn: (e: Error) => void) => {
+    const retry = () => (Date.now() > deadline ? rejectFn(new Error('unhealthy')) : setTimeout(() => attempt(resolveFn, rejectFn), 250));
     const req = httpRequest({ host: '127.0.0.1', port, path: '/', method: 'GET', timeout: 1000 }, (res) => {
       res.resume();
       resolveFn();
     });
-    req.on('error', () => (Date.now() > deadline ? rejectFn(new Error('unhealthy')) : setTimeout(() => attempt(resolveFn, rejectFn), 250)));
+    req.on('error', retry);
     req.on('timeout', () => req.destroy());
     req.end();
   };

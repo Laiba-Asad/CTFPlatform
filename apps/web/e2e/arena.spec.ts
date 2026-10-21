@@ -103,6 +103,25 @@ test('players wait, then all flip to live together when the organizer starts', a
   const c = await joinPlayer(ctxC, 'Carol Arena', 'SH3LLSH0CK');
   await expect(c.getByRole('timer')).toBeVisible({ timeout: 4_000 });
 
+  // The board shows the 15 active missions and no difficulty level anywhere.
+  await expect(a.locator('article[aria-labelledby^="mission-"]')).toHaveCount(15);
+  await expect(a.getByText(/\b(EASY|MEDIUM|HARD)\b/)).toHaveCount(0);
+  await expect(a.getByText(/difficulty/i)).toHaveCount(0);
+
+  // Admin Missions: 15 missions, 2,250 points, no difficulty column or field.
+  await gotoAdmin(adminPage, 'Missions');
+  await expect(adminPage.getByRole('heading', { name: 'Missions' })).toBeVisible();
+  const missions = (await (await adminPage.request.get('/api/admin/missions')).json()).missions as Array<{ points: number }>;
+  expect(missions).toHaveLength(15);
+  expect(missions.reduce((s, m) => s + m.points, 0)).toBe(2250);
+  await expect(adminPage.locator('tbody tr')).toHaveCount(15);
+  await expect(adminPage.getByText(/difficulty/i)).toHaveCount(0);
+  await adminPage.screenshot(SHOT('08-admin-missions'));
+  await adminPage.getByRole('button', { name: 'Edit' }).first().click();
+  await expect(adminPage.getByLabel('Points')).toBeVisible();
+  await expect(adminPage.getByText(/difficulty/i)).toHaveCount(0);
+  await adminPage.getByRole('button', { name: 'Cancel' }).click();
+
   const [sa, sc] = [await timerSeconds(a), await timerSeconds(c)];
   expect(sa).toBeLessThan(3600); // the clock has started ticking for everyone
   expect(Math.abs(sa - sc)).toBeLessThanOrEqual(2); // shared clock: all agree

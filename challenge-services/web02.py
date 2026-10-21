@@ -1,4 +1,4 @@
-"""web2 - Restricted Area. robots.txt points at a disallowed path."""
+"""web2 - Restricted Area. robots.txt points at a disallowed path (/flag.txt)."""
 from flask import Response
 
 from common import ChallengeConfig, base_app
@@ -14,10 +14,10 @@ def create_app(config: ChallengeConfig):
 
     @app.route("/robots.txt")
     def robots():
-        return Response("User-agent: *\nDisallow: /secret-area/\n", mimetype="text/plain")
+        return Response("User-agent: *\nDisallow: /flag.txt\n", mimetype="text/plain")
 
-    @app.route("/secret-area/flag.txt")
-    def secret():
+    @app.route("/flag.txt")
+    def flag():
         return Response(f"Congratulations: {config.flag}", mimetype="text/plain")
 
     return app

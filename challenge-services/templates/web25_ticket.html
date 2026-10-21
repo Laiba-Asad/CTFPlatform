@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticket #{{ t.number }}</title>
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; max-width: 420px; margin: 80px auto; padding: 0 16px; color: #1d1d27; background: #f1f0f7; }
+  .ticket { background: #fff; border: 2px dashed #b9b4d8; border-radius: 10px; padding: 16px 20px; }
+  .num { font-family: "Courier New", monospace; font-size: 20px; }
+</style>
+</head>
+<body>
+<div class="ticket">
+  <h1>Event Ticket</h1>
+  <p class="num">#{{ t.number }}</p>
+  <p>Holder: {{ t.holder }}</p>
+  <p>Seat: {{ t.seat }}</p>
+  <p>Type: {{ t.kind }}</p>
+{% if note %}
+  <p>Organizer note: {{ note }}</p>
+{% endif %}
+</div>
+</body>
+</html>

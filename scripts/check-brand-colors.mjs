@@ -7,6 +7,8 @@
  *  - removed pieces: HudCorner, the Press Start 2P pixel font
  *  - big type (> 32px) and thick borders
  *  - Anton (font-display) outside components/ui/Display.tsx
+ *  - any difficulty level: the word "difficulty" or the EASY / MEDIUM / HARD
+ *    labels (players must not see or infer one; points are the only signal)
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -31,6 +33,8 @@ const rules = [
   ['type larger than 32px', /text-(?:[3-9]xl|\[(?:3[3-9]|[4-9]\d|\d{3,})px\])/g, () => true],
   ['thick border', /(?<![\w-])border(?:-[trblxy])?-(?:4|8|\[(?:[3-9]|\d{2,})px\])(?=["'`\s]|$)/g, () => true],
   ['Anton outside Display.tsx', /font-display/g, (f) => f !== displayFile && !f.startsWith(stylesDir)],
+  ['difficulty (removed)', /difficult/gi, () => true],
+  ['EASY / MEDIUM / HARD label (removed)', /\b(?:EASY|MEDIUM|HARD)\b/g, () => true],
 ];
 
 function* walk(dir) {

@@ -13,10 +13,10 @@ async function admin(app: ReturnType<typeof testApp>['app'], role: 'admin' | 'vi
   return c;
 }
 
-async function addChallenge(id: string, flag: string, points = 100, number = 1) {
+async function addChallenge(id: string, flag: string, points = 100) {
   const { salt, hash } = hashFlag(PEPPER, flag);
   return db.challenge.create({
-    data: { id, number, title: id, description: 'd', category: 'WEB', difficulty: 2, points, flagHash: hash, flagSalt: salt, released: true },
+    data: { id, title: id, description: 'd', category: 'WEB', points, flagHash: hash, flagSalt: salt, released: true },
   });
 }
 

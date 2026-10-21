@@ -1,5 +1,5 @@
 import type { ChallengeCard, EventPhase, MissionState } from '@cydemic/shared';
-import { hasEventStarted, isEventLive } from '@cydemic/shared';
+import { compareMissions, hasEventStarted, isEventLive, missionNumbers } from '@cydemic/shared';
 import type { AppConfig } from '../config';
 import type { Db } from '../lib/db';
 import { getEventState } from './event';
@@ -27,7 +27,7 @@ function missionState(
   if (phase === 'ended') return 'event_ended';
   // phase === 'live'
   if (!challenge.released) return 'locked';
-  // Released and live. For web challenges, reflect the service health when the
+  // Released and live. For challenges with a service, reflect its health when the
   // supervisor is actually managing services; otherwise assume available.
   if (challenge.port && health?.supervising) {
     const status = health.serviceStatus(challenge.id);
@@ -35,6 +35,14 @@ function missionState(
     if (status === 'down') return 'unavailable';
   }
   return 'available';
+}
+
+/**
+ * Display number ("MISSION 01", "#1") of every challenge, from board order
+ * (points, then id). Derived on every read; the challenge id is the identity.
+ */
+export async function missionNumberMap(db: Db): Promise<Map<string, number>> {
+  return missionNumbers(await db.challenge.findMany({ select: { id: true, points: true } }));
 }
 
 /** Player-facing challenge list. Never includes flag material or hidden content. */
@@ -50,27 +58,28 @@ export async function listChallenges(
   const [challenges, mySolves] = await Promise.all([
     db.challenge.findMany({
       where: { visible: true },
-      orderBy: { number: 'asc' },
       include: { attachments: { where: { kind: 'file' }, take: 1 }, _count: { select: { solves: true } } },
     }),
     db.solve.findMany({ where: { userId }, select: { challengeId: true } }),
   ]);
   const solvedSet = new Set(mySolves.map((s) => s.challengeId));
 
-  const cards = challenges.map((c): ChallengeCard => {
+  // Board order: points ascending, then id. The card number is the position in it.
+  const cards = [...challenges].sort(compareMissions).map((c, index): ChallengeCard => {
     const solved = solvedSet.has(c.id);
     const state = missionState({ id: c.id, released: c.released, port: c.port }, solved, phase, health);
     // Content is revealed once the event has started AND the challenge is released.
     const reveal = started && c.released;
     return {
       id: c.id,
-      number: c.number,
+      number: index + 1,
       title: c.title,
       category: c.category,
       points: c.points,
-      difficulty: c.difficulty,
       state,
       solves: c._count.solves,
+      // Every challenge runs a browser-openable service, so its port is the
+      // target link. (The board is browser-only; nothing is found by scanning.)
       port: c.port ?? null,
       hasFile: c.attachments.length > 0,
       description: reveal ? c.description : null,

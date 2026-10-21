@@ -23,7 +23,12 @@
     "admin:seed-dev": "tsx src/scripts/admin-seed-dev.ts",
     "event:reset": "tsx src/scripts/event-reset.ts",
     "flag:hash": "tsx src/scripts/flag-hash.ts",
-    "join-link": "tsx src/scripts/join-link.ts"
+    "challenges:retire": "tsx src/scripts/retire-challenges.ts",
+    "join-link": "tsx src/scripts/join-link.ts",
+    "prod:rehash": "tsx src/scripts/prod-rehash.ts",
+    "preflight": "tsx src/scripts/preflight.ts",
+    "backup": "tsx src/scripts/backup.ts",
+    "restore": "tsx src/scripts/restore.ts"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.10.0",

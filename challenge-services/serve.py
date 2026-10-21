@@ -1,4 +1,4 @@
-"""Entry point run by the supervisor: one process per challenge.
+"""Entry point run by the supervisor: one process per challenge service.
 
 Reads CHALLENGE_ID, CHALLENGE_FLAG, PORT and CHALLENGE_SECRET_* from the
 environment, builds the matching Flask app and serves it with waitress
@@ -14,7 +14,25 @@ from waitress import serve
 
 from common import config_from_env, quiet_logging
 
-MODULES = {f"web{i}": f"web{i:02d}" for i in range(1, 14)}
+# Active challenge services (challenge id -> module). Retired challenges live in
+# _retired/ and are deliberately absent, so they can never be started.
+MODULES = {
+    "web1": "web01",
+    "web2": "web02",
+    "web14": "web14",
+    "web15": "web15",
+    "web16": "web16",
+    "web17": "web17",
+    "web18": "web18",
+    "web19": "web19",
+    "web20": "web20",
+    "web21": "web21",
+    "web22": "web22",
+    "web23": "web23",
+    "web24": "web24",
+    "web25": "web25",
+    "net5": "net5",
+}
 
 
 def main() -> int:

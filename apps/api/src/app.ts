@@ -11,7 +11,7 @@ import { API_ROOT } from './db-url';
 import type { Db } from './lib/db';
 import { createLogger } from './lib/logger';
 import { loadSession } from './middleware/auth';
-import { loadAdminSession, adminSubnetGuard } from './middleware/admin-auth';
+import { loadAdminSession, adminSubnetGuard, adminIpAllowed } from './middleware/admin-auth';
 import { csrfProtection } from './middleware/csrf';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
 import { maintenanceGuard } from './middleware/maintenance';
@@ -35,9 +35,11 @@ interface AppDeps {
   db: Db;
   logger?: Logger;
   supervisor?: AppSupervisor;
+  /** Override the built-web directory (tests). Defaults to apps/web/dist. */
+  webDist?: string;
 }
 
-export function createApp(config: AppConfig, { db, logger = createLogger(config), supervisor }: AppDeps) {
+export function createApp(config: AppConfig, { db, logger = createLogger(config), supervisor, webDist }: AppDeps) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -125,10 +127,43 @@ export function createApp(config: AppConfig, { db, logger = createLogger(config)
 
   // Single-port LAN deploy: serve the built web app from the API.
   if (config.serveWeb) {
-    const dist = resolve(API_ROOT, '..', 'web', 'dist');
+    const dist = webDist ?? resolve(API_ROOT, '..', 'web', 'dist');
     if (existsSync(dist)) {
-      app.use(express.static(dist, { index: false, maxAge: '1h' }));
-      app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(resolve(dist, 'index.html')));
+      // Hide the /admin SPA route from non-allowed addresses in production, so a
+      // player loading /admin gets a plain 404 and never sees the organizer login.
+      app.use((req, res, next) => {
+        if (config.isProd && /^\/admin(\/|$)/.test(req.path) && !adminIpAllowed(config, req.ip ?? '')) {
+          return res.status(404).type('txt').send('Not found');
+        }
+        next();
+      });
+      // Hard block for any dotfile / dot-directory (/.env, /.git/config, ...) and
+      // any traversal, before static or the SPA shell can answer.
+      app.use((req, res, next) => {
+        const decoded = (() => {
+          try {
+            return decodeURIComponent(req.path);
+          } catch {
+            return req.path;
+          }
+        })();
+        if (/(^|[\\/])\.\.?([\\/]|$)/.test(decoded) || /[\\/]\./.test(decoded)) {
+          return res.status(404).type('txt').send('Not found');
+        }
+        next();
+      });
+      // Static files only from the built web output. index:false so the catch-all
+      // owns HTML; redirect:false so /seed does not 301 to /seed/.
+      app.use(express.static(dist, { index: false, maxAge: '1h', dotfiles: 'deny', redirect: false }));
+      // SPA fallback: serve the shell only for real client routes. Everything
+      // else (e.g. /node_modules/, /backups/, /seed/challenges.json) is a 404,
+      // so unknown paths never return the app and never leak the tree.
+      const SPA_ROUTES = new Set(['missions', 'leaderboard', 'toolkit', 'profile', 'intel', 'achievements', 'admin', 'design']);
+      app.get(/^(?!\/api\/).*/, (req, res, next) => {
+        const first = req.path.split('/')[1] ?? '';
+        if (req.path === '/' || SPA_ROUTES.has(first)) return res.sendFile(resolve(dist, 'index.html'));
+        next();
+      });
       logger.info(`Serving web app from ${dist}`);
     } else {
       logger.warn(`SERVE_WEB is set but ${dist} does not exist. Run "npm run build" first.`);

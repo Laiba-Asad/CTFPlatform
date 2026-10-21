@@ -16,12 +16,12 @@ export type MissionState =
 /** Public mission card data. Never contains flag material. */
 export interface MissionSummary {
   id: string;
+  /** Display position in board order (points, then id). Derived, never stored. */
   number: number;
   title: string;
   /** Null while content is hidden (before the event starts or while locked). */
   description: string | null;
   category: string;
-  difficulty: number;
   points: number;
   state: MissionState;
   solves: number;

@@ -1,4 +1,4 @@
-import type { AdminSubmissionRow } from '@cydemic/shared';
+import { type AdminSubmissionRow, missionNumbers } from '@cydemic/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import { verifyFlag } from '../../services/flags';
@@ -25,7 +25,8 @@ async function query(db: Db, config: AppConfig, q: z.infer<typeof Query>) {
   if (q.teamId) where.user = { teamId: q.teamId };
   if (q.from || q.to) where.createdAt = { ...(q.from && { gte: new Date(q.from) }), ...(q.to && { lte: new Date(q.to) }) };
 
-  const challenges = await db.challenge.findMany({ select: { id: true, flagHash: true, flagSalt: true } });
+  const challenges = await db.challenge.findMany({ select: { id: true, points: true, flagHash: true, flagSalt: true } });
+  const numbers = missionNumbers(challenges);
   const matchFor = (text: string | null): string | null => {
     if (!text) return null;
     for (const c of challenges) if (verifyFlag(config.flagPepper, c.flagSalt, c.flagHash, text)) return c.id;
@@ -48,7 +49,7 @@ async function query(db: Db, config: AppConfig, q: z.infer<typeof Query>) {
     at: s.createdAt.toISOString(),
     playerName: s.user.name,
     teamName: s.user.team.name,
-    missionNumber: s.challenge.number,
+    missionNumber: numbers.get(s.challengeId) ?? 0,
     missionTitle: s.challenge.title,
     correct: s.correct,
     ip: s.ip,

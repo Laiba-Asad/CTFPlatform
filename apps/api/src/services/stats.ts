@@ -1,5 +1,6 @@
 import type { PlayerStats, SolvedMission } from '@cydemic/shared';
 import type { Db } from '../lib/db';
+import { missionNumberMap } from './challenges';
 import { aggregatePlayers, rankPlayers } from './scoring';
 
 /**
@@ -22,14 +23,17 @@ export async function getPlayerStats(db: Db, userId: string): Promise<PlayerStat
 }
 
 export async function getSolvedMissions(db: Db, userId: string): Promise<SolvedMission[]> {
-  const solves = await db.solve.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
-    include: { challenge: { select: { id: true, number: true, title: true, category: true } } },
-  });
+  const [solves, numbers] = await Promise.all([
+    db.solve.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: { challenge: { select: { id: true, title: true, category: true } } },
+    }),
+    missionNumberMap(db),
+  ]);
   return solves.map((s) => ({
     challengeId: s.challenge.id,
-    number: s.challenge.number,
+    number: numbers.get(s.challenge.id) ?? 0,
     title: s.challenge.title,
     category: s.challenge.category,
     points: s.points,

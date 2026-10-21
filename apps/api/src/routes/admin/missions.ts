@@ -1,4 +1,4 @@
-import type { AdminMissionRow } from '@cydemic/shared';
+import { type AdminMissionRow, compareMissions } from '@cydemic/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import { HttpError } from '../../lib/http-error';
@@ -12,7 +12,6 @@ const EditBody = z.object({
   title: z.string().min(1).max(120).optional(),
   description: z.string().min(1).max(4000).optional(),
   points: z.number().int().min(0).max(100000).optional(),
-  difficulty: z.number().int().min(1).max(5).optional(),
 });
 const ReleaseBody = z.object({ released: z.boolean(), releaseAt: z.string().datetime({ offset: true }).nullable().optional() });
 
@@ -24,7 +23,7 @@ function serviceStatusOf(sup: AdminSupervisor | undefined, c: { id: string; port
 
 async function rows(db: Db, sup: AdminSupervisor | undefined): Promise<AdminMissionRow[]> {
   const [challenges, solveGroups, wrongGroups, firstSolves] = await Promise.all([
-    db.challenge.findMany({ orderBy: { number: 'asc' } }),
+    db.challenge.findMany(),
     db.solve.groupBy({ by: ['challengeId'], _count: { _all: true } }),
     db.submission.groupBy({ by: ['challengeId'], where: { correct: false }, _count: { _all: true } }),
     db.solve.groupBy({ by: ['challengeId'], _min: { createdAt: true } }),
@@ -32,13 +31,13 @@ async function rows(db: Db, sup: AdminSupervisor | undefined): Promise<AdminMiss
   const solves = new Map(solveGroups.map((g) => [g.challengeId, g._count._all]));
   const wrong = new Map(wrongGroups.map((g) => [g.challengeId, g._count._all]));
   const first = new Map(firstSolves.map((g) => [g.challengeId, g._min.createdAt]));
-  return challenges.map((c) => ({
+  // Board order (points, then id); the number is the position, never stored.
+  return [...challenges].sort(compareMissions).map((c, index) => ({
     id: c.id,
-    number: c.number,
+    number: index + 1,
     title: c.title,
     category: c.category,
     points: c.points,
-    difficulty: c.difficulty,
     released: c.released,
     releaseAt: c.releaseAt?.toISOString() ?? null,
     port: c.port ?? null,
@@ -110,7 +109,7 @@ export function missionsAdminRouter({ db, supervisor }: AdminDeps) {
     const challenge = await db.challenge.findUnique({ where: { id: reqParam(req, 'id') } });
     if (!challenge) throw new HttpError(404, 'NOT_FOUND', 'Challenge not found');
     const data: Record<string, unknown> = {};
-    for (const k of ['title', 'description', 'points', 'difficulty'] as const) if (body[k] !== undefined) data[k] = body[k];
+    for (const k of ['title', 'description', 'points'] as const) if (body[k] !== undefined) data[k] = body[k];
     if (body.points !== undefined && body.points !== challenge.points) {
       // Update the points stored on existing solves so derived scores reflect the new value.
       await db.solve.updateMany({ where: { challengeId: challenge.id }, data: { points: body.points } });
@@ -118,8 +117,8 @@ export function missionsAdminRouter({ db, supervisor }: AdminDeps) {
     const updated = await db.challenge.update({ where: { id: challenge.id }, data });
     await auditFromReq(db, req, 'mission.edit', {
       target: challenge.id,
-      before: { title: challenge.title, points: challenge.points, difficulty: challenge.difficulty },
-      after: { title: updated.title, points: updated.points, difficulty: updated.difficulty },
+      before: { title: challenge.title, points: challenge.points },
+      after: { title: updated.title, points: updated.points },
     });
     res.json({ id: challenge.id });
   });

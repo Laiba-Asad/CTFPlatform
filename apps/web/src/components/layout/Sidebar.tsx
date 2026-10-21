@@ -1,4 +1,4 @@
-import { CircleDot, Medal, Newspaper, Trophy, User, type LucideIcon } from 'lucide-react';
+import { CircleDot, Medal, Newspaper, Trophy, User, Wrench, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router';
 import { cn } from '../../lib/cn';
@@ -14,6 +14,7 @@ export interface NavItem {
 export const PLAYER_NAV: NavItem[] = [
   { key: 'missions', label: 'Missions', to: '/missions', icon: CircleDot },
   { key: 'leaderboard', label: 'Leaderboard', to: '/leaderboard', icon: Trophy },
+  { key: 'toolkit', label: 'Toolkit', to: '/toolkit', icon: Wrench },
   { key: 'intel', label: 'Intel', to: '/intel', icon: Newspaper },
   { key: 'achievements', label: 'Achievements', to: '/achievements', icon: Medal },
   { key: 'profile', label: 'Profile', to: '/profile', icon: User },

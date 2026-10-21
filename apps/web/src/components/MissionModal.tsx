@@ -5,7 +5,6 @@ import { ApiError } from '../lib/api';
 import { attachmentUrl, targetUrl, useSubmitFlag } from '../lib/challenges';
 import { useCountdown } from '../lib/useCountdown';
 import { Button } from './ui/Button';
-import { DifficultyDots } from './ui/DifficultyDots';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { Notice } from './ui/Notice';
@@ -82,7 +81,6 @@ function MissionBody({ mission, acceptingSubmissions }: { mission: ChallengeCard
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <CategoryPill category={mission.category} />
         <Pill>+{mission.points} XP</Pill>
-        <DifficultyDots value={mission.difficulty} />
       </div>
 
       {mission.description ? (

@@ -1,0 +1,3 @@
+# Test-only dependencies for the challenge services (not needed to serve them).
+-r requirements.txt
+pytest==9.1.1

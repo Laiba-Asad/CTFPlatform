@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { AppConfig } from '../config';
 import type { Db } from '../lib/db';
+import { isRetired } from '../challenges/retired';
 import { SEED_DIR } from '../scripts/cli';
 
 const TeamsFile = z.array(
@@ -26,14 +27,16 @@ const EventFile = z.object({
 const ChallengesFile = z.object({
   challenges: z.array(
     z.object({
-      id: z.string().regex(/^(web|net)\d+$/),
-      number: z.number().int().positive(),
+      id: z
+        .string()
+        .regex(/^(web|net)\d+$/)
+        .refine((id) => !isRetired(id), 'retired challenge ids must not be seeded'),
       title: z.string().min(1),
       category: z.enum(['WEB', 'NETWORK']),
       points: z.number().int().positive(),
-      difficulty: z.number().int().min(1).max(5),
       description: z.string().min(1),
-      port: z.number().int().positive().optional(),
+      // Any challenge that runs a service has a port (web challenges and net4).
+      port: z.number().int().min(1024).max(65_535).optional(),
       file: z.string().optional(),
       downloadName: z.string().optional(),
       flagSalt: z.string().min(1),
@@ -96,10 +99,13 @@ export async function seed(db: Db, config: AppConfig, options: SeedOptions = {})
   if (startsAt && endsAt) {
     if (endsAt <= startsAt) throw new Error('Event end must be after its start');
     window = { startsAt, endsAt };
-  } else if (mode === 'scheduled' && config.isProd) {
+  } else if (mode === 'scheduled' && config.isProd && config.event.timerMode === 'scheduled') {
+    // Legacy date-driven mode only: it genuinely needs real dates.
     throw new Error('Set real event dates (seed/event.json or EVENT_START/EVENT_END) before seeding a scheduled production event');
   } else {
-    // No fixed dates: use a rolling window so the live-mode countdown is sensible.
+    // No fixed dates: use a rolling window. With TIMER_MODE=event (the production
+    // default) the organizer starts the shared clock, so these dates are only a
+    // placeholder window and the event stays "waiting" until Start is pressed.
     const start = Date.now() + event.devWindow.startOffsetMinutes * 60_000;
     window = { startsAt: new Date(start), endsAt: new Date(start + event.devWindow.durationHours * 3_600_000) };
   }
@@ -129,11 +135,9 @@ export async function seed(db: Db, config: AppConfig, options: SeedOptions = {})
     const { challenges } = ChallengesFile.parse(JSON.parse(read('challenges.json')));
     for (const c of challenges) {
       const base = {
-        number: c.number,
         title: c.title,
         description: c.description,
         category: c.category,
-        difficulty: c.difficulty,
         points: c.points,
         flagHash: c.flagHash,
         flagSalt: c.flagSalt,
@@ -156,6 +160,10 @@ export async function seed(db: Db, config: AppConfig, options: SeedOptions = {})
         } else {
           await db.attachment.create({ data: { challengeId: c.id, kind: 'file', name, location } });
         }
+      } else {
+        // Capture files are owned by the seed: a challenge without one (e.g. net3,
+        // now a live service) must not keep a stale download link.
+        await db.attachment.deleteMany({ where: { challengeId: c.id, kind: 'file' } });
       }
     }
     log(`Challenges: ${challenges.length} upserted${config.challenges.autoUnlockAll ? ' (auto-unlocked)' : ''}`);

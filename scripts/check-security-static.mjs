@@ -4,7 +4,8 @@
  *  1. No literal `flag{` in any tracked source file (real flags live only in
  *     the git-ignored .flags.env).
  *  2. No debug=True / use_debugger / use_reloader=True in challenge-services.
- *  3. No command-execution APIs in challenge-services/web08.py.
+ *  3. No command-execution APIs in any active challenge service module
+ *     (challenge-services/web*.py, net*.py; retired ones in _retired/ are inert).
  *  4. No http(s):// asset URLs in the web app source or the challenge templates
  *     (the LAN may be offline; everything must be self-hosted).
  *  5. Nothing secret or generated is tracked by git (*.pyc, *.db, .flags.env,
@@ -24,7 +25,10 @@ const problems = [];
 const add = (msg) => problems.push(msg);
 
 const IGNORE_DIRS = new Set(['node_modules', '.git', '.venv', 'dist', 'coverage', 'generated', 'runtime', 'generatedprisma']);
-const SKIP_NAMES = new Set(['.flags.env', '.flags.env.example', 'check-security-static.mjs', 'package-lock.json']);
+// ORGANIZER-ANSWER-KEY.md holds the real flags on purpose; it is git-ignored and
+// check 5 fails the build if it is ever tracked.
+const ANSWER_KEY = 'ORGANIZER-ANSWER-KEY.md';
+const SKIP_NAMES = new Set(['.flags.env', '.flags.env.example', 'check-security-static.mjs', 'package-lock.json', ANSWER_KEY]);
 
 function* walk(dir) {
   for (const name of readdirSync(dir)) {
@@ -66,7 +70,8 @@ for (const file of walk(svc)) {
   if (name.startsWith('test_')) continue;
   const text = readFileSync(file, 'utf8');
   if (debugRe.test(text)) add(`debugger/reloader enabled in ${relative(repo, file)}`);
-  if (name === 'web08.py' && cmdRe.test(text)) add(`command-execution API in ${relative(repo, file)}`);
+  const activeService = /^(web|net)\d+\.py$/.test(name) && relative(svc, file) === name;
+  if (activeService && cmdRe.test(text)) add(`command-execution API in ${relative(repo, file)}`);
 }
 
 // 4. external asset URLs in web source and challenge templates
@@ -86,6 +91,7 @@ try {
   const tracked = execFileSync('git', ['ls-files'], { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split(/\r?\n/);
   const bad = tracked.filter((f) =>
     /\.pyc$/.test(f) || /\.db$/.test(f) || f.endsWith('.flags.env') ||
+    (/(^|\/)\.flags\.env\./.test(f) && !f.endsWith('.flags.env.example')) || f.split('/').pop() === ANSWER_KEY ||
     f.startsWith('challenge-services/generated/') || f.startsWith('challenge-services/runtime/'),
   );
   for (const f of bad) add(`secret/generated file tracked by git: ${f}`);

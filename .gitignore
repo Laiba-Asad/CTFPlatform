@@ -9,10 +9,14 @@ coverage/
 # generated Prisma client (rebuilt by postinstall / db:generate)
 apps/api/src/generated/
 
+# organizer answer key (flags + solutions) - local only, never commit
+ORGANIZER-ANSWER-KEY.md
+
 # environment - never commit real secrets
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # local databases
 *.db
@@ -21,8 +25,12 @@ apps/api/src/generated/
 *.db-shm
 *.sqlite
 
-# database backups
+# database backups (apps/api/backups and the configurable BACKUP_DIR, default ./backups)
 apps/api/backups/
+/backups/
+
+# production runtime logs
+/logs/
 
 # challenge attachments are private and loaded per event
 storage/attachments/*
@@ -33,6 +41,8 @@ __pycache__/
 *.pyc
 challenge-services/.venv/
 challenge-services/.flags.env
+challenge-services/.flags.env.*
+!challenge-services/.flags.env.example
 challenge-services/generated/
 challenge-services/runtime/
 challenge-services/logs/

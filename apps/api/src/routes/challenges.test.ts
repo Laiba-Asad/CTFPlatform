@@ -11,17 +11,15 @@ async function setEvent(mode: 'live' | 'upcoming' | 'paused' | 'ended') {
   await seedEvent(db, mode === 'upcoming' ? 'waiting' : mode);
 }
 
-async function addChallenge(d: Db, over: Partial<{ id: string; number: number; flag: string; released: boolean; port: number | null; points: number }> = {}) {
+async function addChallenge(d: Db, over: Partial<{ id: string; flag: string; released: boolean; port: number | null; points: number; category: string }> = {}) {
   const id = over.id ?? 'web1';
   const { salt, hash } = hashFlag(PEPPER, over.flag ?? `CYFLAG-${id}`);
   return d.challenge.create({
     data: {
       id,
-      number: over.number ?? 1,
       title: `Title ${id}`,
       description: `Describe ${id}`,
-      category: 'WEB',
-      difficulty: 2,
+      category: over.category ?? 'WEB',
       points: over.points ?? 100,
       flagHash: hash,
       flagSalt: salt,

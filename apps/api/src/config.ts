@@ -26,6 +26,10 @@ const EnvSchema = z.object({
   // Interface the server binds to. 0.0.0.0 to be reachable from the LAN.
   HOST: z.string().default('127.0.0.1'),
   API_PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
+  // Port the production single-URL deploy serves players on (API + built web app).
+  WEB_PORT: z.coerce.number().int().min(1).max(65_535).default(80),
+  // Where `npm run backup` writes snapshots (can point at a USB drive).
+  BACKUP_DIR: z.string().default('backups'),
 
   // Public address players use to reach the platform, e.g. http://192.168.1.50 or http://ctf.local.
   PUBLIC_URL: z.string().default(''),
@@ -33,7 +37,10 @@ const EnvSchema = z.object({
   ALLOWED_ORIGINS: z.string().default('http://localhost:5173'),
   // Optional CIDR allowlist for client IPs, e.g. "192.168.1.0/24,10.0.0.0/8". Empty = allow all.
   ALLOWED_SUBNETS: z.string().default(''),
-  TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(0),
+  // Number of proxy hops to trust. Accepts false/true (0/1) as well as a count.
+  TRUST_PROXY: z
+    .preprocess((v) => (v === 'false' || v === 'no' ? 0 : v === 'true' || v === 'yes' ? 1 : v), z.coerce.number().int().min(0).max(10))
+    .default(0),
 
   SESSION_SECRET: z.string().min(32, 'must be at least 32 characters').optional(),
   FLAG_PEPPER: z.string().min(32, 'must be at least 32 characters').optional(),
@@ -100,6 +107,9 @@ const EnvSchema = z.object({
   // --- Admin dashboard ---------------------------------------------------------
   // CIDR allowlist for the admin area (/admin and /api/admin). Default: localhost only.
   ADMIN_ALLOWED_SUBNETS: z.string().default(''),
+  // Exact client IPs allowed to reach /admin and /api/admin. Default: localhost
+  // only. In production, anyone else gets 404 (they can't even see the login).
+  ADMIN_ALLOWED_IPS: z.string().default('127.0.0.1,::1'),
   ADMIN_IDLE_TIMEOUT_MIN: z.coerce.number().int().positive().default(60),
   ADMIN_MAX_SESSION_HOURS: z.coerce.number().int().positive().default(8),
   ADMIN_LOGIN_MAX_FAILURES: z.coerce.number().int().positive().default(5),
@@ -137,6 +147,8 @@ function buildConfig(env: z.infer<typeof EnvSchema>) {
     logLevel: env.LOG_LEVEL,
     host: env.HOST,
     port: env.API_PORT,
+    webPort: env.WEB_PORT,
+    backupDir: env.BACKUP_DIR,
     publicUrl,
     allowedOrigins: [...new Set(allowedOrigins)],
     allowedSubnets: env.ALLOWED_SUBNETS.split(',').map((s) => s.trim()).filter(Boolean),
@@ -196,6 +208,8 @@ function buildConfig(env: z.infer<typeof EnvSchema>) {
     admin: {
       // Default: localhost only, so the admin area isn't reachable from the LAN unless opened.
       allowedSubnets: env.ADMIN_ALLOWED_SUBNETS.split(',').map((s) => s.trim()).filter(Boolean),
+      // Exact IPs allowed to reach the admin area. Localhost is always allowed.
+      allowedIps: [...new Set(['127.0.0.1', '::1', ...env.ADMIN_ALLOWED_IPS.split(',').map((s) => s.trim()).filter(Boolean)])],
       idleTimeoutMs: env.ADMIN_IDLE_TIMEOUT_MIN * 60_000,
       maxSessionMs: env.ADMIN_MAX_SESSION_HOURS * 3_600_000,
       loginMaxFailures: env.ADMIN_LOGIN_MAX_FAILURES,
@@ -233,6 +247,11 @@ export function parseConfig(raw: NodeJS.ProcessEnv): AppConfig {
     if (env.EVENT_MODE === 'live') {
       throw new ConfigError(
         'EVENT_MODE=live is not allowed in production (it would force the event open regardless of the schedule). Use EVENT_MODE=scheduled and set EVENT_START/EVENT_END.',
+      );
+    }
+    if (env.AUTO_UNLOCK_ALL) {
+      throw new ConfigError(
+        'AUTO_UNLOCK_ALL=true is not allowed in production (it would release every challenge before you start the event). Remove it and use the admin "Release all" control on the day.',
       );
     }
   }

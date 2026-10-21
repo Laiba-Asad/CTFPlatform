@@ -99,17 +99,14 @@ model Event {
 
 model Challenge {
   id            String   @id @default(cuid())
-  number        Int      @unique
   title         String
   description   String
   category      String
-  /// 1-5
-  difficulty    Int
   points        Int
   /// HMAC-SHA256(FLAG_PEPPER, salt + flag). Plain-text flags are never stored.
   flagHash      String
   flagSalt      String
-  /// Web challenges: the port their service listens on. Null for net challenges.
+  /// Port of the challenge service (any category that runs one). Null for capture-file challenges.
   port          Int?
   /// Admin release control. Locked = card visible, target unreachable, service stopped.
   released      Boolean  @default(false)

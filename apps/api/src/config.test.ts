@@ -17,6 +17,30 @@ describe('parseConfig', () => {
     );
   });
 
+  it('refuses unsafe production config: EVENT_MODE=live and AUTO_UNLOCK_ALL', () => {
+    const prod = { NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(32), FLAG_PEPPER: 'y'.repeat(32) };
+    expect(() => parseConfig({ ...prod, EVENT_MODE: 'live' })).toThrow(/EVENT_MODE=live/);
+    expect(() => parseConfig({ ...prod, AUTO_UNLOCK_ALL: 'true' })).toThrow(/AUTO_UNLOCK_ALL/);
+    // Both are fine in development.
+    expect(parseConfig({ AUTO_UNLOCK_ALL: 'true' }).challenges.autoUnlockAll).toBe(true);
+  });
+
+  it('admin allowed IPs always include localhost and parse extras', () => {
+    expect(parseConfig({}).admin.allowedIps).toEqual(['127.0.0.1', '::1']);
+    expect(parseConfig({ ADMIN_ALLOWED_IPS: '192.168.1.50, 192.168.1.51' }).admin.allowedIps).toEqual([
+      '127.0.0.1',
+      '::1',
+      '192.168.1.50',
+      '192.168.1.51',
+    ]);
+  });
+
+  it('exposes WEB_PORT (default 80) and BACKUP_DIR (default backups)', () => {
+    expect(parseConfig({}).webPort).toBe(80);
+    expect(parseConfig({ WEB_PORT: '8080' }).webPort).toBe(8080);
+    expect(parseConfig({}).backupDir).toBe('backups');
+  });
+
   it('keeps cookies non-secure on a plain-HTTP LAN deploy and secure behind HTTPS', () => {
     const prod = { NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(32), FLAG_PEPPER: 'y'.repeat(32) };
     // Plain-HTTP LAN: PUBLIC_URL is http (or unset) -> non-secure so cookies work.

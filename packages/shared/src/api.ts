@@ -81,7 +81,6 @@ export interface ChallengeCard {
   title: string;
   category: string;
   points: number;
-  difficulty: number;
   state: import('./types').MissionState;
   solves: number;
   /** Web challenges only: the port the target service listens on. */

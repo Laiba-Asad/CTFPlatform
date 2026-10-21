@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { AppConfig } from '../config';
+import { RETIRED_CHALLENGE_IDS } from '../challenges/retired';
 import type { Db } from '../lib/db';
 import { getEventState } from '../services/event';
 
@@ -8,7 +9,8 @@ export interface HealthReport {
   uptime: number;
   database: 'ok' | 'unavailable';
   event: { mode: string; phase: string; startsAt: string; endsAt: string } | null;
-  challenges: { released: number; total: number };
+  /** withService = challenges that run a service (port set); retired ids are never counted. */
+  challenges: { released: number; total: number; withService: number; retiredInDatabase: string[] };
   services: { supervising: boolean; up: number; starting: number; down: number; detail: Array<{ id: string; status: string }> };
 }
 
@@ -27,14 +29,21 @@ export async function buildHealthReport(db: Db, _config: AppConfig, supervisor?:
   let event: HealthReport['event'] = null;
   let released = 0;
   let total = 0;
+  let withService = 0;
+  let retiredInDatabase: string[] = [];
   if (database === 'ok') {
     try {
       const state = await getEventState(db);
       event = { mode: state.mode, phase: state.phase, startsAt: state.startsAt.toISOString(), endsAt: state.endsAt.toISOString() };
-      [released, total] = await Promise.all([
-        db.challenge.count({ where: { released: true } }),
-        db.challenge.count(),
+      const active = { id: { notIn: [...RETIRED_CHALLENGE_IDS] } };
+      let retiredRows: Array<{ id: string }>;
+      [released, total, withService, retiredRows] = await Promise.all([
+        db.challenge.count({ where: { ...active, released: true } }),
+        db.challenge.count({ where: active }),
+        db.challenge.count({ where: { ...active, port: { not: null } } }),
+        db.challenge.findMany({ where: { id: { in: [...RETIRED_CHALLENGE_IDS] } }, select: { id: true } }),
       ]);
+      retiredInDatabase = retiredRows.map((r) => r.id);
     } catch {
       database = 'unavailable';
     }
@@ -48,7 +57,7 @@ export async function buildHealthReport(db: Db, _config: AppConfig, supervisor?:
     uptime: Math.round(process.uptime()),
     database,
     event,
-    challenges: { released, total },
+    challenges: { released, total, withService, retiredInDatabase },
     services: {
       supervising: summary.supervising,
       up: count('up'),

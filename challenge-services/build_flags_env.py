@@ -1,36 +1,91 @@
-"""Create challenge-services/.flags.env from the old project's app.py.
+"""Create or update challenge-services/.flags.env (git-ignored). Prints counts only.
 
-The flags and the web5/web9 secrets are part of the challenges, so they are
-imported verbatim from the old code. A fresh random signing key for visitor
-cookies is generated. Nothing is printed except counts.
+Create (fresh setup; refuses to overwrite an existing file):
 
     python build_flags_env.py "C:\\path\\to\\old\\app.py"
 
-Default source: ../../capturetheflag/capturetheflag/app.py relative to repo.
-The output file is git-ignored and must be recreated (or copied securely) on
-the server. Run once at setup, before starting services or generating captures.
+  The 8 challenges kept from the old CTF (and the web5/web9 secrets) are
+  imported verbatim from the old app.py; the 7 beginner challenges added for the
+  22 October 2026 event get fresh random flags; VISITOR_KEY is a fresh random key.
+  Default source: ../../capturetheflag/capturetheflag/app.py relative to repo.
+
+Update (an existing file):
+
+    python build_flags_env.py --update
+
+  Copies the current file to .flags.env.pre-phase5.bak (git-ignored; a later
+  run writes a timestamped .bak instead of overwriting it), drops the
+  retired challenges' flags and settings no challenge uses any more, and appends
+  a fresh random flag for any active challenge that is missing. Existing flag
+  values are never changed.
+
+After either: npm run flag:hash, then npm run seed (and npm run challenges:captures).
 """
 import os
 import re
 import secrets
+import shutil
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 DEFAULT_SRC = os.path.join(os.path.dirname(REPO), "capturetheflag", "capturetheflag", "app.py")
 OUT = os.path.join(HERE, ".flags.env")
+BACKUP = os.path.join(HERE, ".flags.env.pre-phase5.bak")
+
+IMPORTED = ["web1", "web2"]
+GENERATED = ["web14", "web15", "web16", "web17", "web18",
+             "web19", "web20", "web21", "web22", "web23", "web24", "web25", "net5"]
+RETIRED = ["web3", "web6", "web7", "web8", "web11", "web12", "net2",
+           "web4", "web5", "web9", "web10", "web13", "net1", "net3", "net4"]
+# Per-challenge settings the new challenges need (none at the moment).
+EXTRAS: dict = {}
+# Per-challenge secrets generated randomly on create/update when missing.
+GENERATED_SECRETS = ["WEB23_PASSWORD"]
+# Settings no active challenge uses any more; --update removes them.
+OBSOLETE = ["WEB18_USERNAME", "WEB18_PASSWORD", "WEB5_JWT_SECRET", "WEB9_OTP", "WEB9_PHONE"]
+
+# Same shape as the imported flags: leetspeak words joined by underscores. The
+# words are random (not derived from the title) and a random tail makes each unique.
+WORDS = ["h4rb0r", "l1ght", "p4ck3t", "c0ff33", "r1v3r", "m4pl3", "c0m3t", "s1lv3r", "w1nd0w", "ech0",
+         "f0x", "pl4n3t", "t1d3", "c4bl3", "n0rth", "sp4rk", "4mb3r", "qu1lt", "r0ck3t", "l4nt3rn",
+         "m1rr0r", "c0d3x", "b34c0n", "dr1ft", "gl1tch", "p1x3l", "0rb1t", "t0rch", "v4ult", "z3ph"]
+FLAG_OPEN, FLAG_CLOSE = "flag" + "{", "}"  # split so this file never holds a flag literal
 
 
-def main() -> int:
-    src = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_SRC
+def new_flag(taken: set) -> str:
+    while True:
+        words = [secrets.choice(WORDS) for _ in range(3)]
+        tail = "".join(secrets.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(5))
+        flag = FLAG_OPEN + "_".join(words + [tail]) + FLAG_CLOSE
+        if flag not in taken:
+            return flag
+
+
+def new_password() -> str:
+    # A readable staff password the web23 script joins from pieces (no flag format).
+    words = ["river", "copper", "lantern", "maple", "harbor", "silver", "cobalt", "willow", "ember", "quartz"]
+    return "-".join(secrets.choice(words) for _ in range(3)) + str(secrets.randbelow(90) + 10)
+
+
+def write(lines: list) -> None:
+    with open(OUT, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines).rstrip("\n") + "\n")
+    os.chmod(OUT, 0o600)
+
+
+def create(src: str) -> int:
+    if os.path.exists(OUT):
+        print(f"{OUT} already exists. Use --update to add missing flags (it never overwrites values).", file=sys.stderr)
+        return 1
     if not os.path.exists(src):
         print(f"Source app.py not found: {src}\nPass the path as an argument.", file=sys.stderr)
         return 1
     text = open(src, "r", encoding="utf-8").read()
 
     flags = dict(re.findall(r"'(web\d+|net\d)':\s*\{[^}]*'flag':\s*'([^']+)'", text))
-    expected = [f"web{i}" for i in range(1, 14)] + ["net1", "net2"]
-    missing = [c for c in expected if c not in flags]
+    missing = [c for c in IMPORTED if c not in flags]
     if missing:
         print(f"Could not find flags for: {', '.join(missing)}", file=sys.stderr)
         return 1
@@ -42,22 +97,71 @@ def main() -> int:
         print("Could not find web5/web9 secrets in source.", file=sys.stderr)
         return 1
 
+    taken = {flags[c] for c in IMPORTED}
     lines = ["# Generated by build_flags_env.py. Secret - never commit.", ""]
-    for cid in expected:
+    for cid in IMPORTED:
         lines.append(f"FLAG_{cid}={flags[cid]}")
+    for cid in GENERATED:
+        flag = new_flag(taken)
+        taken.add(flag)
+        lines.append(f"FLAG_{cid}={flag}")
     lines += [
         "",
         f"WEB5_JWT_SECRET={jwt_secret.group(1)}",
         f"WEB9_OTP={otp.group(1)}",
         f"WEB9_PHONE={phone.group(1)}",
+        *(f"{k}={v}" for k, v in EXTRAS.items()),
         f"VISITOR_KEY={secrets.token_urlsafe(32)}",
-        "",
     ]
-    with open(OUT, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(lines))
-    os.chmod(OUT, 0o600)
-    print(f"Wrote {OUT} with {len(expected)} flags and 3 challenge secrets.")
+    write(lines)
+    print(f"Wrote {OUT} with {len(IMPORTED) + len(GENERATED)} flags ({len(GENERATED)} newly generated).")
     return 0
+
+
+def update() -> int:
+    if not os.path.exists(OUT):
+        print(f"{OUT} does not exist. Create it first (see --help).", file=sys.stderr)
+        return 1
+    # Never overwrite an earlier backup (the first one holds the retired flags).
+    backup = BACKUP if not os.path.exists(BACKUP) else os.path.join(HERE, f".flags.env.{time.strftime('%Y%m%d-%H%M%S')}.bak")
+    shutil.copy2(OUT, backup)
+    lines = open(OUT, "r", encoding="utf-8").read().splitlines()
+    key = lambda line: line.split("=", 1)[0].strip() if "=" in line and not line.lstrip().startswith("#") else None
+    retired_keys = {f"FLAG_{c}" for c in RETIRED} | set(OBSOLETE)
+    kept = [line for line in lines if key(line) not in retired_keys]
+    removed = len(lines) - len(kept)
+    present = {key(line) for line in kept if key(line)}
+    taken = {line.split("=", 1)[1].strip() for line in kept if (key(line) or "").startswith("FLAG_")}
+
+    added = []
+    for cid in IMPORTED + GENERATED:
+        if f"FLAG_{cid}" not in present:
+            if cid in IMPORTED:
+                print(f"FLAG_{cid} is missing and cannot be generated (it comes from the old app.py).", file=sys.stderr)
+                return 1
+            flag = new_flag(taken)
+            taken.add(flag)
+            added.append(f"FLAG_{cid}={flag}")
+    extras = [f"{k}={v}" for k, v in EXTRAS.items() if k not in present]
+    for name in GENERATED_SECRETS:
+        if name not in present:
+            extras.append(f"{name}={new_password()}")
+    if added or extras:
+        kept += ["", "# Added by build_flags_env.py --update (browser-only challenges)."] + added + extras
+    write(kept)
+    print(f"Backup: {backup}")
+    print(f"Removed {removed} retired/obsolete line(s); added {len(added)} flag(s) and {len(extras)} setting(s).")
+    return 0
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    if args[:1] in (["-h"], ["--help"]):
+        print(__doc__)
+        return 0
+    if args[:1] == ["--update"]:
+        return update()
+    return create(args[0] if args else DEFAULT_SRC)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,8 @@
 /**
- * npm run flag:hash
+ * npm run flag:hash            regenerate seed/challenges.json
+ * npm run flag:hash -- --check verify it instead: every challenge's stored hash
+ *                              must match its flag in .flags.env under the
+ *                              current FLAG_PEPPER (prints OK/MISMATCH per id only)
  *
  * Combines seed/challenges.meta.json (editable, no secrets) with the plaintext
  * flags in challenge-services/.flags.env into seed/challenges.json, replacing
@@ -12,8 +15,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadConfig } from '../config';
 import { API_ROOT } from '../db-url';
-import { hashFlag } from '../services/flags';
-import { runScript } from './cli';
+import { hashFlag, verifyFlag } from '../services/flags';
+import { hasFlag, runScript } from './cli';
 
 const REPO = resolve(API_ROOT, '../..');
 const META = resolve(REPO, 'seed/challenges.meta.json');
@@ -40,6 +43,21 @@ runScript(async () => {
     console.warn('WARNING: hashing with the development FLAG_PEPPER. Set a real FLAG_PEPPER before the event and re-run.');
   }
   const flags = parseEnvFile(FLAGS_ENV);
+
+  if (hasFlag('--check')) {
+    const seeded = JSON.parse(readFileSync(OUT, 'utf8')) as { challenges: Array<{ id: string; flagSalt: string; flagHash: string }> };
+    let bad = 0;
+    for (const c of seeded.challenges) {
+      const plain = flags[`FLAG_${c.id}`];
+      const status = !plain ? 'MISSING in .flags.env' : verifyFlag(config.flagPepper, c.flagSalt, c.flagHash, plain) ? 'OK' : 'MISMATCH';
+      if (status !== 'OK') bad += 1;
+      console.log(`  ${c.id.padEnd(6)} ${status}`);
+    }
+    console.log(bad ? `${bad} problem(s). Run npm run flag:hash, then npm run seed.` : `All ${seeded.challenges.length} flag hashes match .flags.env.`);
+    if (bad) process.exitCode = 1;
+    return;
+  }
+
   const meta = JSON.parse(readFileSync(META, 'utf8')) as { challenges: Array<Record<string, unknown>> };
 
   const out = meta.challenges.map((c) => {

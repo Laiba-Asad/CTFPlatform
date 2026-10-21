@@ -74,6 +74,51 @@ What to check while live:
 | 21 | Locked vs released mission (admin **Missions**) | Locked missions show "Locked"; releasing one makes it playable |
 | 22 | Export a CSV (admin **Export** → Certificates) | A CSV downloads with name, team, rank, score, solved |
 | 23 | **Viewer** admin account (Settings → create a viewer) | Viewer can read every page but every change button is disabled |
+| 24 | Look at the mission board and open any mission | Points, category, solver count and state only. **No** EASY / MEDIUM / HARD and no difficulty dots anywhere |
+| 25 | Count the mission cards | **15** missions, ordered by points (lowest first); worth **2,250** points in total |
+| 26 | Open any mission and read its briefing | Solvable with the browser and DevTools only (plus the in-site **Toolkit**); nothing to install |
+| 27 | Admin **Missions** page | 15 rows, no difficulty column, the edit dialog has no difficulty field |
+| 28 | Open the **Toolkit** page (sidebar) | Base64/hex/ROT13/URL/binary decoders that work offline; type text and see it convert |
+| 29 | Run `npm run doctor` while the event is live and everything is released | `15 up, 0 starting, 0 down (15 released of 15 with a service)`; no retired challenge listed |
+
+## 4b. The challenges on the board
+
+15 challenges, **2,250 points**, chosen so beginners can finish within the
+one-hour clock. **Every one is solvable with just a web browser and its built-in
+DevTools** - no Burp, nmap, Wireshark, curl or anything to install. The in-site
+**Toolkit** page handles any decoding (Base64, hex, ROT13, URL, binary).
+
+| id | Title | Points | Port | Where to look (browser only) |
+|---|---|---|---|---|
+| web1 | The Snack Cabinet | 100 | 5001 | DevTools > Application > Cookies |
+| web14 | Open the Hood | 100 | 5014 | View Source / Inspect |
+| web15 | Decode Me | 100 | 5015 | DevTools > Sources, then the Toolkit |
+| web19 | Invisible Ink | 100 | 5019 | Select All / Inspect Element |
+| web20 | Locked Button | 100 | 5020 | DevTools > Elements (enable the button) |
+| web16 | Header Hunt | 150 | 5016 | DevTools > Network (Preserve log) |
+| web17 | Price Tag | 150 | 5017 | DevTools > Elements (edit a hidden field) |
+| web18 | Layers | 150 | 5018 | the Toolkit (Base64, ROT13) |
+| web21 | Storage Locker | 150 | 5021 | DevTools > Application > Local Storage |
+| web22 | Console Whisper | 150 | 5022 | DevTools > Console |
+| web23 | Gatekeeper | 150 | 5023 | DevTools > Sources (read the script) |
+| web2 | Restricted Area | 200 | 5002 | /robots.txt in the browser |
+| web24 | Badge Check | 200 | 5024 | DevTools > Application > Cookies (edit) |
+| web25 | Guest List | 200 | 5025 | the address bar (change the ticket id) |
+| net5 | Plain Text | 250 | 5026 | the in-site Capture Viewer (filter, follow stream) |
+
+**New** for the 22 October 2026 event: web19-web25, net5 (and the reworked web16,
+web17, web18 from the previous round).
+**Retired** (removed from the board, kept aside in `challenge-services/_retired/`):
+web3-web13 (except the kept ones), net1-net4. They must not appear anywhere.
+
+Flags and intended solutions are in the organizer's local `ORGANIZER-ANSWER-KEY.md`
+(never shared). Testers should solve without it, then report anything that felt
+unclear or took more than a few minutes.
+
+Automated checks (run by a developer): `npm run typecheck`, `npm test` (brand,
+security and unit/API tests), `npm run test:e2e` (browser journeys), and in
+`challenge-services`: `.venv/Scripts/python -m pytest` (a solve test and a
+no-leak test for every challenge).
 
 ## 5. Reset the data between test rounds
 
@@ -92,3 +137,24 @@ For each issue, note: **what you did**, **what you expected**, **what happened**
 the **page/URL**, and your **browser**. A screenshot helps. Include the time, so
 the organizer can match it to the server's **Audit log** (admin → Audit log).
 Do **not** include any flag value or password in a bug report.
+
+## 7. Production (Windows VM) checks
+
+These run in production mode (`NODE_ENV=production`). Full steps are in
+`docs/DEPLOY-WINDOWS-VM.md` and `docs/EVENT-DAY-RUNBOOK.md`.
+
+| # | Action | Expected result |
+|---|---|---|
+| P1 | `npm run preflight` after `prod:init` + firewall | Every line **PASS**; exits 0 |
+| P2 | Open `http://<vm-ip>:8080` from a player laptop | Login screen with six teams |
+| P3 | Open `http://<vm-ip>:8080/admin` from a **non-allowed** machine | Plain **404** (login not shown) |
+| P4 | Open `/admin` from the VM (or an allowed IP) | Organizer sign-in |
+| P5 | `npm run exposure-check -- http://<vm-ip>:8080` from the laptop | **PASS**; nothing sensitive reachable, `/admin` blocked |
+| P6 | Before **Start event now**, open a released mission | Not openable ("opens when the event starts") |
+| P7 | **Missions → Release all**, then **Event → Start event now** | Confirmations shown and audited; board goes live; `15/15 released · 15/15 services up` |
+| P8 | Restart the VM mid-event, run `start-event.cmd` again | Clock, scores, solves and released missions intact; services restart |
+| P9 | `npm run backup` / `npm run restore -- <file>` | Snapshot written; restore takes a safety backup and asks to confirm |
+
+**Verified test counts:** 31 shared · 146 API · 8 web/toolkit · 65 challenge-service
+(pytest) · 13 Playwright = **263 automated tests**, all passing. Load test: 40
+players, 0 errors, API p95 ~100 ms.

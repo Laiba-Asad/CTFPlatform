@@ -8,6 +8,7 @@ import { ApiError } from './lib/api';
 import { useFeatures } from './lib/auth';
 import { DashboardPage } from './pages/DashboardPage';
 import { LeaderboardPage } from './pages/LeaderboardPage';
+import { ToolkitPage } from './pages/ToolkitPage';
 import { LoginPage } from './pages/LoginPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SectionPlaceholder } from './pages/SectionPlaceholder';
@@ -48,6 +49,7 @@ export function App() {
                 <Route element={<PlayerLayout />}>
                   <Route path="/missions" element={<DashboardPage />} />
                   <Route path="/leaderboard" element={<LeaderboardPage />} />
+                  <Route path="/toolkit" element={<ToolkitPage />} />
                   <Route path="/intel" element={<FeatureGate feature="intel"><SectionPlaceholder title="Intel" /></FeatureGate>} />
                   <Route
                     path="/achievements"
